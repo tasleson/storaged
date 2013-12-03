@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.3//EN"
+               "http://www.oasis-open.org/docbook/xml/4.3/docbookx.dtd"
+[<!ENTITY version SYSTEM "../version.xml">]>
+<refentry id="udisks.8">
+  <refentryinfo>
+    <title>udisks-lvm</title>
+    <date>December 2013</date>
+    <productname>udisks</productname>
+  </refentryinfo>
+
+  <refmeta>
+    <refentrytitle>udisks-lvm</refentrytitle>
+    <manvolnum>8</manvolnum>
+    <refmiscinfo class="manual">System Administration</refmiscinfo>
+    <refmiscinfo class="source">udisks</refmiscinfo>
+    <refmiscinfo class="version">&version;</refmiscinfo>
+  </refmeta>
+
+  <refnamediv>
+    <refname>udisks-lvm</refname>
+    <refpurpose>Disk Manager</refpurpose>
+  </refnamediv>
+
+  <refsect1><title>DESCRIPTION</title>
+    <para>
+      udisks provides interfaces to enumerate and perform operations
+      on disks and storage devices. This is an addon daemon that provides
+      LVM functionality to DBus callers.
+    </para>
+  </refsect1>
+
+  <refsect1><title>AUTHOR</title>
+    <para>
+      Written by Stef Walter
+      <email><![CDATA[stefw@redhat.com]]></email> and Marius Vollmer
+      <email><![CDATA[mvollmer@redhat.com]]></email> as an interim addon.
+    </para>
+  </refsect1>
+
+  <refsect1>
+    <title>BUGS</title>
+    <para>
+      Please send bug reports to <email><![CDATA[mvollmer@redhat.com]]></email>.
+    </para>
+  </refsect1>
+
+  <refsect1>
+    <title>SEE ALSO</title>
+    <para>
+      <link linkend="udisksd.8"><citerefentry><refentrytitle>udisksd</refentrytitle><manvolnum>8</manvolnum></citerefentry></link>,
+      <link linkend="udisksctl.1"><citerefentry><refentrytitle>udisksctl</refentrytitle><manvolnum>1</manvolnum></citerefentry></link>
+    </para>
+  </refsect1>
+</refentry>

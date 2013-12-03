@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=com.redhat.lvm2
+Exec=@udisksdprivdir@/udisks-lvm --no-debug
+User=root
+SystemdService=udisks-lvm.service
