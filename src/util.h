@@ -32,11 +32,6 @@ gchar *             ul_util_escape                  (const gchar *str);
 
 gchar *             ul_util_escape_and_quote        (const gchar *str);
 
-GPid                ul_util_spawn_for_variant       (const gchar **argv,
-                                                     const GVariantType *type,
-                                                     void (*callback) (GPid, GVariant *, GError *, gpointer),
-                                                     gpointer user_data);
-
 gchar *             ul_util_encode_lvm_name         (const gchar *name,
                                                      gboolean for_logical_volume);
 

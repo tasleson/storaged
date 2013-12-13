@@ -62,6 +62,9 @@ struct _UlDaemon
 
   /* may be NULL if polkit is masked */
   PolkitAuthority *authority;
+
+  /* The libdir if overridden */
+  gchar *resource_dir;
 };
 
 struct _UlDaemonClass
@@ -74,6 +77,7 @@ enum
   PROP_0,
   PROP_CONNECTION,
   PROP_OBJECT_MANAGER,
+  PROP_RESOURCE_DIR,
 };
 
 G_DEFINE_TYPE (UlDaemon, ul_daemon, G_TYPE_OBJECT);
@@ -89,6 +93,7 @@ ul_daemon_finalize (GObject *object)
   g_object_unref (self->object_manager);
   g_object_unref (self->connection);
   g_object_unref (self->manager);
+  g_free (self->resource_dir);
 
   G_OBJECT_CLASS (ul_daemon_parent_class)->finalize (object);
 }
@@ -126,6 +131,11 @@ ul_daemon_set_property (GObject      *object,
     case PROP_CONNECTION:
       g_assert (self->connection == NULL);
       self->connection = g_value_dup_object (value);
+      break;
+
+    case PROP_RESOURCE_DIR:
+      g_assert (self->resource_dir == NULL);
+      self->resource_dir = g_value_dup_string (value);
       break;
 
     default:
@@ -212,6 +222,16 @@ ul_daemon_class_init (UlDaemonClass *klass)
                                                         G_TYPE_DBUS_OBJECT_MANAGER_SERVER,
                                                         G_PARAM_READABLE |
                                                         G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class,
+                                   PROP_RESOURCE_DIR,
+                                   g_param_spec_string ("resource-dir",
+                                                        "Resource Directory",
+                                                        "Override directory to use resources from",
+                                                        NULL,
+                                                        G_PARAM_WRITABLE |
+                                                        G_PARAM_CONSTRUCT_ONLY |
+                                                        G_PARAM_STATIC_STRINGS));
 }
 
 UlDaemon *
@@ -233,6 +253,21 @@ ul_daemon_get_manager (UlDaemon *self)
 {
   g_return_val_if_fail (UL_IS_DAEMON (self), NULL);
   return self->manager;
+}
+
+gchar *
+ul_daemon_get_resource_path (UlDaemon *self,
+                             gboolean arch_specific,
+                             const gchar *file)
+{
+  g_return_val_if_fail (UL_IS_DAEMON (self), NULL);
+
+  if (self->resource_dir)
+      return g_build_filename (self->resource_dir, file, NULL);
+  else if (arch_specific)
+      return g_build_filename (PACKAGE_LIB_DIR, "udisks2", file, NULL);
+  else
+      return g_build_filename (PACKAGE_DATA_DIR, "udisks2", file, NULL);
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
@@ -925,4 +960,137 @@ ul_daemon_get_caller_uid_sync (UlDaemon *daemon,
 
  out:
   return ret;
+}
+
+struct VariantReaderData {
+  const GVariantType *type;
+  void (*callback) (GPid pid, GVariant *result, GError *error, gpointer user_data);
+  gpointer user_data;
+  GPid pid;
+  GIOChannel *output_channel;
+  GByteArray *output;
+  gint output_watch;
+};
+
+static gboolean
+variant_reader_child_output (GIOChannel *source,
+                             GIOCondition condition,
+                             gpointer user_data)
+{
+  struct VariantReaderData *data = user_data;
+  guint8 buf[1024];
+  gsize bytes_read;
+
+  g_io_channel_read_chars (source, (gchar *)buf, sizeof buf, &bytes_read, NULL);
+  g_byte_array_append (data->output, buf, bytes_read);
+  return TRUE;
+}
+
+static void
+variant_reader_watch_child (GPid     pid,
+                            gint     status,
+                            gpointer user_data)
+{
+  struct VariantReaderData *data = user_data;
+  guint8 *buf;
+  gsize buf_size;
+  GVariant *result;
+  GError *error = NULL;
+
+  data->pid = 0;
+
+  if (!g_spawn_check_exit_status (status, &error))
+    {
+      data->callback (pid, NULL, error, data->user_data);
+      g_error_free (error);
+      g_byte_array_free (data->output, TRUE);
+    }
+  else
+    {
+      if (g_io_channel_read_to_end (data->output_channel, (gchar **)&buf, &buf_size, NULL) == G_IO_STATUS_NORMAL)
+        {
+          g_byte_array_append (data->output, buf, buf_size);
+          g_free (buf);
+        }
+
+      result = g_variant_new_from_data (data->type,
+                                        data->output->data,
+                                        data->output->len,
+                                        TRUE,
+                                        g_free, NULL);
+      g_byte_array_free (data->output, FALSE);
+      data->callback (pid, result, NULL, data->user_data);
+      g_variant_unref (result);
+    }
+}
+
+static void
+variant_reader_destroy (gpointer user_data)
+{
+  struct VariantReaderData *data = user_data;
+
+  g_source_remove (data->output_watch);
+  g_io_channel_unref (data->output_channel);
+  g_free (data);
+}
+
+GPid
+ul_daemon_spawn_for_variant (UlDaemon *daemon,
+                             const gchar **argv,
+                             const GVariantType *type,
+                             void (*callback) (GPid, GVariant *, GError *, gpointer),
+                             gpointer user_data)
+{
+  GError *error;
+  struct VariantReaderData *data;
+  gchar *prog = NULL;
+  GPid pid;
+  gint output_fd;
+
+  /*
+   * This is so we can override the location of udisks-lvm-helper
+   * during testing.
+   */
+
+  if (!strchr (argv[0], '/'))
+    {
+      prog = ul_daemon_get_resource_path (daemon, TRUE, argv[0]);
+      argv[0] = prog;
+    }
+
+  if (!g_spawn_async_with_pipes (NULL,
+                                 (gchar **)argv,
+                                 NULL,
+                                 G_SPAWN_DO_NOT_REAP_CHILD,
+                                 NULL,
+                                 NULL,
+                                 &pid,
+                                 NULL,
+                                 &output_fd,
+                                 NULL,
+                                 &error))
+    {
+      callback (0, NULL, error, user_data);
+      g_error_free (error);
+      return 0;
+    }
+
+  data = g_new0 (struct VariantReaderData, 1);
+
+  data->type = type;
+  data->callback = callback;
+  data->user_data = user_data;
+
+  data->pid = pid;
+  data->output = g_byte_array_new ();
+  data->output_channel = g_io_channel_unix_new (output_fd);
+  g_io_channel_set_encoding (data->output_channel, NULL, NULL);
+  g_io_channel_set_flags (data->output_channel, G_IO_FLAG_NONBLOCK, NULL);
+  data->output_watch = g_io_add_watch (data->output_channel, G_IO_IN, variant_reader_child_output, data);
+
+  g_child_watch_add_full (G_PRIORITY_DEFAULT_IDLE,
+                          pid, variant_reader_watch_child, data, variant_reader_destroy);
+
+  g_free (prog);
+  return pid;
 }

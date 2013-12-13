@@ -34,10 +34,12 @@
 static GMainLoop *loop = NULL;
 static gboolean opt_replace = FALSE;
 static gboolean opt_debug = FALSE;
+static gchar *opt_resources = NULL;
 static GOptionEntry opt_entries[] =
 {
   {"replace", 'r', 0, G_OPTION_ARG_NONE, &opt_replace, "Replace existing daemon", NULL},
   {"debug", 'd', 0, G_OPTION_ARG_NONE, &opt_debug, "Print debug information on stderr", NULL},
+  { "resource-dir", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_FILENAME, &opt_resources, NULL, NULL },
   {NULL }
 };
 
@@ -48,7 +50,11 @@ on_bus_acquired (GDBusConnection *connection,
                  const gchar *name,
                  gpointer user_data)
 {
-  the_daemon = g_object_new (UL_TYPE_DAEMON, "connection", connection, NULL);
+  the_daemon = g_object_new (UL_TYPE_DAEMON,
+                             "connection", connection,
+                             "resource-dir", opt_resources,
+                             NULL);
+
   g_debug ("Connected to the system bus");
 }
 

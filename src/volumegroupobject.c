@@ -493,8 +493,13 @@ update_with_variant (GPid pid,
 void
 ul_volume_group_object_update (UlVolumeGroupObject *self)
 {
-  const gchar *args[] = { "/usr/lib/udisks2/udisks-lvm", "-b", "show", self->name, NULL };
-  ul_util_spawn_for_variant (args, G_VARIANT_TYPE ("a{sv}"), update_with_variant, g_object_ref (self));
+  const gchar *args[] = {
+      "udisks-lvm-helper", "-b",
+      "show", self->name, NULL
+  };
+
+  ul_daemon_spawn_for_variant (ul_daemon_get (), args, G_VARIANT_TYPE ("a{sv}"),
+                               update_with_variant, g_object_ref (self));
 }
 
 static void
@@ -581,15 +586,18 @@ poll_timeout (gpointer user_data)
 static void
 poll_now (UlVolumeGroupObject *self)
 {
-  const gchar *args[] = { "/usr/lib/udisks2/udisks-lvm", "-b", "show", self->name, NULL };
+  const gchar *args[] = {
+      "udisks-lvm-helper",
+      "-b", "show", self->name, NULL
+  };
 
   self->poll_timeout_id = g_timeout_add (5000, poll_timeout, g_object_ref (self));
 
   if (self->poll_pid)
     kill (self->poll_pid, SIGINT);
 
-  self->poll_pid = ul_util_spawn_for_variant (args, G_VARIANT_TYPE ("a{sv}"),
-                                              poll_with_variant, g_object_ref (self));
+  self->poll_pid = ul_daemon_spawn_for_variant (ul_daemon_get (), args, G_VARIANT_TYPE ("a{sv}"),
+                                                poll_with_variant, g_object_ref (self));
 }
 
 void

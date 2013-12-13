@@ -52,6 +52,10 @@ GDBusObject *              ul_daemon_find_object         (UlDaemon *self,
 
 UlManager *                ul_daemon_get_manager         (UlDaemon *self);
 
+gchar *                    ul_daemon_get_resource_path   (UlDaemon *self,
+                                                          gboolean arch_specific,
+                                                          const gchar *path);
+
 /**
  * UlDaemonWaitFunc:
  * @daemon: A #UlDaemon.
@@ -116,6 +120,12 @@ gboolean              ul_daemon_get_caller_pid_sync      (UlDaemon *self,
                                                           GCancellable *cancellable,
                                                           pid_t *out_pid,
                                                           GError **error);
+
+GPid                  ul_daemon_spawn_for_variant        (UlDaemon *self,
+                                                          const gchar **argv,
+                                                          const GVariantType *type,
+                                                          void (*callback) (GPid, GVariant *, GError *, gpointer),
+                                                          gpointer user_data);
 
 G_END_DECLS
 
