@@ -39,6 +39,8 @@ data/*.service
 doc/version.xml
 doc/man/*.8
 
+po/udisks-lvm.pot
+
 src/com.redhat.lvm2.*
 src/udisks-lvm
 src/udisks-lvm-helper

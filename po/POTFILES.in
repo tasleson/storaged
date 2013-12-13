@@ -2,3 +2,7 @@
 # List of source files containing translatable strings.
 # Please keep this file sorted alphabetically.
 data/com.redhat.lvm2.policy.in
+src/basejob.c
+src/logicalvolume.c
+src/manager.c
+src/volumegroup.c
