@@ -19,11 +19,28 @@ AM_CPPFLAGS = \
 	$(WARN_CFLAGS)						\
 	$(NULL)
 
+LDADD = \
+	$(GLIB_LIBS) \
+	$(GIO_LIBS) \
+	libtesting.la \
+	$(NULL)
+
 # ----------------------------------------------------------------------------------------------------
 
-TESTS =
+noinst_LTLIBRARIES = libtesting.la
 
-noinst_PROGRAMS =
+libtesting_la_SOURCES = \
+	testing.h testing.c \
+	$(NULL)
 
-all:
-	@true
+TEST_PROGS = \
+	test-info \
+	$(NULL)
+
+TESTS = \
+	$(TEST_PROGS) \
+	$(NULL)
+
+noinst_PROGRAMS = \
+	$(TEST_PROGS) \
+	$(NULL)

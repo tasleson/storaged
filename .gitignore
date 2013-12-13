@@ -45,6 +45,9 @@ src/com.redhat.lvm2.*
 src/udisks-lvm
 src/udisks-lvm-helper
 
+src/tests/test-*
+!src/tests/test-*.[ch]
+
 po/.intltool*
 
 
