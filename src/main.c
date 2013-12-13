@@ -91,7 +91,32 @@ on_sigint (gpointer user_data)
 }
 
 static void
-log_handler (const gchar *log_domain,
+on_log_debug (const gchar *log_domain,
+              GLogLevelFlags log_level,
+              const gchar *message,
+              gpointer user_data)
+{
+  GString *string;
+  const gchar *progname;
+  int ret;
+
+  string = g_string_new (NULL);
+
+  progname = g_get_prgname ();
+  g_string_append_printf (string, "(%s:%lu): %s%sDEBUG: %s\n",
+                          progname ? progname : "process", (gulong)getpid (),
+                          log_domain ? log_domain : "", log_domain ? "-" : "",
+                          message ? message : "(NULL) message");
+
+  ret = write (1, string->str, string->len);
+
+  /* Yes this is dumb, but gets around compiler warning */
+  g_warn_if_fail (ret >= 0);
+  g_string_free (string, TRUE);
+}
+
+static void
+on_log_handler (const gchar *log_domain,
                 GLogLevelFlags log_level,
                 const gchar *message,
                 gpointer user_data)
@@ -204,8 +229,16 @@ main (int argc,
       goto out;
     }
 
-  if (!opt_debug)
-    g_log_set_default_handler (log_handler, NULL);
+  if (opt_debug)
+    {
+      g_log_set_handler (G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO, on_log_debug, NULL);
+      g_log_set_always_fatal (G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL | G_LOG_LEVEL_WARNING);
+    }
+  else
+    {
+      /* When not in debug mode, send all logging to syslog */
+      g_log_set_default_handler (on_log_handler, NULL);
+    }
 
   if (g_getenv ("PATH") == NULL)
     g_setenv ("PATH", "/usr/bin:/bin:/usr/sbin:/sbin", TRUE);
