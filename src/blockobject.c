@@ -93,6 +93,7 @@ ul_block_object_set_property (GObject *object,
     case PROP_UDEV_CLIENT:
       self->udev_client = g_value_dup_object (value);
       g_assert (self->udev_client != NULL);
+      break;
 
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);

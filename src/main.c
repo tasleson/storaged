@@ -63,7 +63,7 @@ on_name_lost (GDBusConnection *connection,
     }
   else
     {
-      g_info ("Lost (or failed to acquire) the name %s on the system message bus", name);
+      g_message ("Lost (or failed to acquire) the name %s on the system message bus", name);
     }
   g_main_loop_quit (loop);
 }

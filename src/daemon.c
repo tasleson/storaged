@@ -90,8 +90,7 @@ ul_daemon_finalize (GObject *object)
   g_object_unref (self->connection);
   g_object_unref (self->manager);
 
-  if (G_OBJECT_CLASS (ul_daemon_parent_class)->finalize != NULL)
-    G_OBJECT_CLASS (ul_daemon_parent_class)->finalize (object);
+  G_OBJECT_CLASS (ul_daemon_parent_class)->finalize (object);
 }
 
 static void
@@ -146,11 +145,10 @@ static void
 ul_daemon_constructed (GObject *object)
 {
   UlDaemon *self = UL_DAEMON (object);
+  GDBusObjectSkeleton *skeleton;
   GError *error;
 
   G_OBJECT_CLASS (ul_daemon_parent_class)->constructed (object);
-
-  self->manager = ul_manager_new ();
 
   error = NULL;
   self->authority = polkit_authority_get_sync (NULL, &error);
@@ -166,6 +164,13 @@ ul_daemon_constructed (GObject *object)
 
   /* Export the ObjectManager */
   g_dbus_object_manager_server_set_connection (self->object_manager, self->connection);
+
+  self->manager = ul_manager_new ();
+
+  skeleton = G_DBUS_OBJECT_SKELETON (lvm_object_skeleton_new ("/org/freedesktop/UDisks2/Manager"));
+  g_dbus_object_skeleton_add_interface (skeleton, G_DBUS_INTERFACE_SKELETON (self->manager));
+  g_dbus_object_manager_server_export (self->object_manager, skeleton);
+  g_object_unref (skeleton);
 }
 
 static void

@@ -34,7 +34,7 @@ struct _UlManager
   LvmManagerSkeleton parent;
 
   UDisksClient *udisks_client;
-  GUdevClient *gudev_client;
+  GUdevClient *udev_client;
 
   /* maps from volume group name to UlVolumeGroupObject
      instances.
@@ -43,6 +43,8 @@ struct _UlManager
   GHashTable *real_block_to_lvm_block;
 
   gint lvm_delayed_update_id;
+  gint sig_added;
+  gint sig_removed;
 };
 
 typedef struct
@@ -120,8 +122,13 @@ lvm_update_from_variant (GPid pid,
 static void
 lvm_update (UlManager *self)
 {
-  const gchar *args[] = { "/usr/lib/udisks2/udisks-lvm", "-b", "list", NULL };
-  ul_util_spawn_for_variant (args, G_VARIANT_TYPE("as"), lvm_update_from_variant, self);
+  const gchar *args[] = {
+      "udisks-lvm-helper", "-b", "list",
+      NULL
+  };
+
+  ul_daemon_spawn_for_variant (ul_daemon_get (), args, G_VARIANT_TYPE("as"),
+                               lvm_update_from_variant, self);
 }
 
 static gboolean
@@ -230,14 +237,97 @@ on_uevent (GUdevClient *client,
 }
 
 static void
+on_udisks_interface_added (GDBusObjectManager *udisks_object_manager,
+                           GDBusObject *object,
+                           GDBusInterface *interface,
+                           gpointer user_data)
+{
+  UlManager *self = user_data;
+  GDBusObjectSkeleton *overlay;
+  GDBusObjectManagerServer *object_manager;
+  const gchar *path;
+
+  if (!UDISKS_IS_BLOCK (interface))
+    return;
+
+  /* Same path as the original real udisks block */
+  path = g_dbus_proxy_get_object_path (G_DBUS_PROXY (interface));
+
+  overlay = g_object_new (UL_TYPE_BLOCK_OBJECT,
+                          "real-block", interface,
+                          "udev-client", self->udev_client,
+                          "g-object-path", path,
+                          NULL);
+
+  g_debug ("%s: export block object", path);
+  object_manager = ul_daemon_get_object_manager (ul_daemon_get ());
+  g_dbus_object_manager_server_export (object_manager, overlay);
+  g_object_unref (overlay);
+}
+
+static void
+on_udisks_interface_removed (GDBusObjectManager *udisks_object_manager,
+                             GDBusObject *object,
+                             GDBusInterface *interface,
+                             gpointer user_data)
+{
+  GDBusObjectManagerServer *object_manager;
+  const gchar *path;
+
+  if (!UDISKS_IS_BLOCK (interface))
+    return;
+
+  /* Same path as the original real udisks block */
+  path = g_dbus_proxy_get_object_path (G_DBUS_PROXY (interface));
+
+  g_debug ("%s: unexport block object", path);
+  object_manager = ul_daemon_get_object_manager (ul_daemon_get ());
+  g_dbus_object_manager_server_unexport (object_manager, path);
+}
+
+static void
 ul_manager_init (UlManager *self)
 {
-  const gchar *subsystems[] = {"block", "iscsi_connection", "scsi", NULL};
+  GDBusObjectManager *object_manager;
+  GError *error = NULL;
+  GList *objects, *o;
+  GList *interfaces, *i;
+
+  const gchar *subsystems[] = {
+      "block",
+      "iscsi_connection",
+      "scsi",
+      NULL
+  };
 
   /* get ourselves an udev client */
-  self->gudev_client = g_udev_client_new (subsystems);
+  self->udev_client = g_udev_client_new (subsystems);
+  g_signal_connect (self->udev_client, "uevent", G_CALLBACK (on_uevent), self);
 
-  g_signal_connect (self->gudev_client, "uevent", G_CALLBACK (on_uevent), self);
+  self->udisks_client = udisks_client_new_sync (NULL, &error);
+  if (error != NULL)
+    {
+      g_critical ("Couldn't connect to the main udisksd: %s", error->message);
+      g_clear_error (&error);
+    }
+  else
+    {
+      object_manager = udisks_client_get_object_manager (self->udisks_client);
+      objects = g_dbus_object_manager_get_objects (object_manager);
+      for (o = objects; o != NULL; o = g_list_next (o))
+        {
+          interfaces = g_dbus_object_get_interfaces (o->data);
+          for (i = interfaces; i != NULL; i = g_list_next (i))
+            on_udisks_interface_added (object_manager, o->data, i->data, self);
+          g_list_free_full (interfaces, g_object_unref);
+        }
+      g_list_free_full (objects, g_object_unref);
+
+      self->sig_added = g_signal_connect (object_manager, "interface-added",
+                                          G_CALLBACK (on_udisks_interface_added), self);
+      self->sig_removed = g_signal_connect (object_manager, "interface-removed",
+                                            G_CALLBACK (on_udisks_interface_removed), self);
+    }
 }
 
 static void
@@ -245,12 +335,16 @@ ul_manager_constructed (GObject *object)
 {
   UlManager *self = UL_MANAGER (object);
 
+  G_OBJECT_CLASS (ul_manager_parent_class)->constructed (object);
+
   self->name_to_volume_group = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
                                                       (GDestroyNotify) g_object_unref);
 
   do_delayed_lvm_update_now (self);
 
-  G_OBJECT_CLASS (ul_manager_parent_class)->constructed (object);
+  udisks_client_settle (self->udisks_client);
+
+
 }
 
 static void
@@ -258,7 +352,8 @@ ul_manager_finalize (GObject *object)
 {
   UlManager *self = UL_MANAGER (object);
 
-  g_object_unref (self->gudev_client);
+  g_clear_object (&self->udev_client);
+  g_clear_object (&self->udisks_client);
   g_hash_table_unref (self->name_to_volume_group);
 
   G_OBJECT_CLASS (ul_manager_parent_class)->finalize (object);
