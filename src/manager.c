@@ -43,8 +43,12 @@ struct _UlManager
   GHashTable *real_block_to_lvm_block;
 
   gint lvm_delayed_update_id;
-  gint sig_added;
-  gint sig_removed;
+
+  /* GDBusObjectManager is that special kind of ugly */
+  gulong sig_object_added;
+  gulong sig_object_removed;
+  gulong sig_interface_added;
+  gulong sig_interface_removed;
 };
 
 typedef struct
@@ -266,6 +270,20 @@ on_udisks_interface_added (GDBusObjectManager *udisks_object_manager,
 }
 
 static void
+on_udisks_object_added (GDBusObjectManager *udisks_object_manager,
+                        GDBusObject *object,
+                        gpointer user_data)
+{
+  GList *interfaces, *l;
+
+  /* Yes, GDBusObjectManager really is this awkward */
+  interfaces = g_dbus_object_get_interfaces (object);
+  for (l = interfaces; l != NULL; l = g_list_next (l))
+    on_udisks_interface_added (udisks_object_manager, object, l->data, user_data);
+  g_list_free_full (interfaces, g_object_unref);
+}
+
+static void
 on_udisks_interface_removed (GDBusObjectManager *udisks_object_manager,
                              GDBusObject *object,
                              GDBusInterface *interface,
@@ -283,6 +301,20 @@ on_udisks_interface_removed (GDBusObjectManager *udisks_object_manager,
   g_debug ("%s: unexport block object", path);
   object_manager = ul_daemon_get_object_manager (ul_daemon_get ());
   g_dbus_object_manager_server_unexport (object_manager, path);
+}
+
+static void
+on_udisks_object_removed (GDBusObjectManager *udisks_object_manager,
+                          GDBusObject *object,
+                          gpointer user_data)
+{
+  GList *interfaces, *l;
+
+  /* Yes, GDBusObjectManager really is this awkward */
+  interfaces = g_dbus_object_get_interfaces (object);
+  for (l = interfaces; l != NULL; l = g_list_next (l))
+    on_udisks_interface_removed (udisks_object_manager, object, l->data, user_data);
+  g_list_free_full (interfaces, g_object_unref);
 }
 
 static void
@@ -323,10 +355,14 @@ ul_manager_init (UlManager *self)
         }
       g_list_free_full (objects, g_object_unref);
 
-      self->sig_added = g_signal_connect (object_manager, "interface-added",
-                                          G_CALLBACK (on_udisks_interface_added), self);
-      self->sig_removed = g_signal_connect (object_manager, "interface-removed",
-                                            G_CALLBACK (on_udisks_interface_removed), self);
+      self->sig_object_added = g_signal_connect (object_manager, "object-added",
+                                                 G_CALLBACK (on_udisks_object_added), self);
+      self->sig_interface_added = g_signal_connect (object_manager, "interface-added",
+                                                    G_CALLBACK (on_udisks_interface_added), self);
+      self->sig_object_removed = g_signal_connect (object_manager, "object-removed",
+                                                   G_CALLBACK (on_udisks_object_removed), self);
+      self->sig_interface_removed = g_signal_connect (object_manager, "interface-removed",
+                                                      G_CALLBACK (on_udisks_interface_removed), self);
     }
 }
 
@@ -343,17 +379,29 @@ ul_manager_constructed (GObject *object)
   do_delayed_lvm_update_now (self);
 
   udisks_client_settle (self->udisks_client);
-
-
 }
 
 static void
 ul_manager_finalize (GObject *object)
 {
   UlManager *self = UL_MANAGER (object);
+  GDBusObjectManager *objman;
+
+  if (self->udisks_client)
+    {
+      objman = udisks_client_get_object_manager (self->udisks_client);
+      if (self->sig_object_added)
+        g_signal_handler_disconnect (objman, self->sig_object_added);
+      if (self->sig_interface_added)
+        g_signal_handler_disconnect (objman, self->sig_interface_added);
+      if (self->sig_object_removed)
+        g_signal_handler_disconnect (objman, self->sig_object_removed);
+      if (self->sig_interface_removed)
+        g_signal_handler_disconnect (objman, self->sig_interface_removed);
+      g_object_unref (self->udisks_client);
+    }
 
   g_clear_object (&self->udev_client);
-  g_clear_object (&self->udisks_client);
   g_hash_table_unref (self->name_to_volume_group);
 
   G_OBJECT_CLASS (ul_manager_parent_class)->finalize (object);
