@@ -85,10 +85,22 @@ on_name_acquired (GDBusConnection *connection,
 static gboolean
 on_sigint (gpointer user_data)
 {
-  g_info ("Caught SIGINT. Initiating shutdown");
+  g_info ("Caught signal. Initiating shutdown");
   g_main_loop_quit (loop);
   return FALSE;
 }
+
+static gboolean
+on_stdout_close (GIOChannel *channel,
+                 GIOCondition condition,
+                 gpointer data)
+{
+  /* Nowhere to log */
+  syslog (LOG_INFO, "%s", "output closed");
+  g_main_loop_quit (loop);
+  return FALSE;
+}
+
 
 static void
 on_log_debug (const gchar *log_domain,
@@ -98,20 +110,35 @@ on_log_debug (const gchar *log_domain,
 {
   GString *string;
   const gchar *progname;
+  const gchar *level;
   int ret;
 
   string = g_string_new (NULL);
 
+  switch (log_level & G_LOG_LEVEL_MASK)
+    {
+      case G_LOG_LEVEL_DEBUG:
+        level = "DEBUG";
+        break;
+      case G_LOG_LEVEL_INFO:
+        level = "INFO";
+        break;
+      default:
+        level = "";
+        break;
+    }
+
   progname = g_get_prgname ();
-  g_string_append_printf (string, "(%s:%lu): %s%sDEBUG: %s\n",
+  g_string_append_printf (string, "(%s:%lu): %s%s%s: %s\n",
                           progname ? progname : "process", (gulong)getpid (),
                           log_domain ? log_domain : "", log_domain ? "-" : "",
-                          message ? message : "(NULL) message");
+                          level, message ? message : "(NULL) message");
 
   ret = write (1, string->str, string->len);
 
   /* Yes this is dumb, but gets around compiler warning */
-  g_warn_if_fail (ret >= 0);
+  ret = ret;
+
   g_string_free (string, TRUE);
 }
 
@@ -200,8 +227,9 @@ main (int argc,
 {
   GError *error;
   GOptionContext *opt_context;
-  gint ret;
+  GIOChannel *channel;
   guint name_owner_id;
+  gint ret;
 
   ret = 1;
   loop = NULL;
@@ -211,6 +239,9 @@ main (int argc,
 #if !GLIB_CHECK_VERSION(2,36,0)
   g_type_init ();
 #endif
+
+  /* See glib/gio/gsocket.c */
+  signal (SIGPIPE, SIG_IGN);
 
   /* avoid gvfs (http://bugzilla.gnome.org/show_bug.cgi?id=526454) */
   if (!g_setenv ("GIO_USE_VFS", "local", TRUE))
@@ -233,6 +264,11 @@ main (int argc,
     {
       g_log_set_handler (G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO, on_log_debug, NULL);
       g_log_set_always_fatal (G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL | G_LOG_LEVEL_WARNING);
+
+      /* When in debug mode (often testing) we exit when stdin closes */
+      channel = g_io_channel_unix_new (0);
+      g_io_add_watch (channel, G_IO_HUP, on_stdout_close, NULL);
+      g_io_channel_unref (channel);
     }
   else
     {
@@ -249,6 +285,7 @@ main (int argc,
 
   g_unix_signal_add (SIGINT, on_sigint, NULL);
   g_unix_signal_add (SIGTERM, on_sigint, NULL);
+  g_unix_signal_add (SIGHUP, on_sigint, NULL);
 
   name_owner_id = g_bus_own_name (G_BUS_TYPE_SYSTEM,
                                   "com.redhat.lvm2",

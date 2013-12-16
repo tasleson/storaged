@@ -49,3 +49,43 @@ tracker reference if applicable) and so forth. Be concise but not too brief.
    not '-') and include the bug URL in the commit message. Example:
    "Bug 24885 — LVM LVs now have NOPOLICY=0" and
    http://bugs.freedesktop.org/show_bug.cgi?id=24885.
+
+RUNNING TESTS
+=============
+
+Since LVM tests can be destructive, we make sure to run the tests on another
+machine, such as a virtual machine. This machine is called the target.
+
+Prerequisites:
+
+ * The target machine must have the same operating system and version as
+   the machine that is building udisks-lvm.
+ * The target machine must be accessible as root via SSH from the
+   build machine, preferrably with an SSH key.
+ * The build directory of udisks-lvm must be NFS mounted in exactly the
+   same location on the target machine. This mount can be read-only,
+   unless coverage testing is desired.
+ * All dependencies of udisks-lvm must be installed on the target machine.
+
+Export build directory on build machine:
+
+ * Put this in /etc/exports on build machine
+
+   /path/to/build  IP.OF.TAR.GET/255.255.255.255 (ro,all_squash,anonuid=XXX,anongid=XXX)
+
+ * Run this:
+
+   # systemctl restart nfs-server
+
+Mount build directory on target machine:
+
+ * Run this:
+
+   # mkdir -p /path/to/build
+   # mount IP.OF.BUI.LD:/path/to/build /path/to/build
+
+Running the tests
+
+ * Specify the target machine in an environment variable when running tests:
+
+   # TEST_TARGET=root@IP.OF.TAR.GET make check

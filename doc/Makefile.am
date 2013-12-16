@@ -4,5 +4,5 @@ SUBDIRS = man
 EXTRA_DIST = \
 	version.xml.in
 
-CLEANFILES = \
+DISTCLEANFILES = \
 	version.xml

@@ -55,7 +55,7 @@
  * channels over that one.
  */
 
-#define VERBOSE_STDOUT 0
+#define EXTRA_VERBOSE 0
 
 /* Global setup by testing_target_init() */
 const gchar *testing_target_name = NULL;
@@ -130,7 +130,7 @@ testing_target_cleanup (void)
   g_unlink (control_path_arg + control_path_prefix_len);
 }
 
-#if VERBOSE_STDOUT
+#if EXTRA_VERBOSE
 static gboolean
 write_all (int fd,
            const gchar *data,
@@ -184,7 +184,7 @@ drain_thread (gpointer data)
         }
       else if (ret > 0)
         {
-#if VERBOSE_STDOUT
+#if EXTRA_VERBOSE
           if (!write_all (1, buf, ret))
             break;
 #endif
@@ -198,7 +198,6 @@ drain_thread (gpointer data)
 static gboolean
 read_until_end_or_matches (int fd,
                            const gchar *pattern,
-                           gboolean echo,
                            GString *data)
 {
   GPatternSpec *spec = NULL;
@@ -233,9 +232,8 @@ read_until_end_or_matches (int fd,
         }
       else if (ret > 0)
         {
-#if VERBOSE_STDOUT
-          if (echo)
-            write_all (1, data->str + len, ret);
+#if EXTRA_VERBOSE
+          write_all (1, data->str + len, ret);
 #endif
 
           data->len = len + ret;
@@ -264,7 +262,6 @@ control_master_start (void)
   gchar *endptr;
   gint tempfd;
   gint outfd;
-  gchar *cmd;
 
   /*
    * Here we start the control master. It needs a command to run, so the
@@ -298,12 +295,14 @@ control_master_start (void)
       g_unlink (control_path_arg + control_path_prefix_len);
     }
 
+#if EXTRA_VERBOSE
   if (g_test_verbose ())
     {
-      cmd = g_strjoinv (" ", (gchar **)args);
-      g_printerr ("+ %s\n", cmd);
+      gchar *cmd = g_strjoinv (" ", (gchar **)args);
+      g_printerr ("+ \n", cmd);
       g_free (cmd);
     }
+#endif
 
   /* And run the ssh control master */
   g_spawn_async_with_pipes (NULL, (gchar **)args, NULL,
@@ -314,7 +313,7 @@ control_master_start (void)
 
   /* Read the stdout of the id command */
   userid = g_string_new ("");
-  if (!read_until_end_or_matches (outfd, NULL, FALSE, userid))
+  if (!read_until_end_or_matches (outfd, NULL, userid))
     g_assert_not_reached ();
   close (outfd);
 
@@ -345,6 +344,7 @@ testing_target_init (void)
 GDBusConnection *
 testing_target_connect (void)
 {
+  const gchar *bus_path = "/var/run/dbus/system_bus_socket";
   GDBusConnection *connection;
   GInputStream *input;
   GOutputStream *output;
@@ -354,7 +354,6 @@ testing_target_connect (void)
   GString *resp;
   gint infd;
   gint outfd;
-  gchar *cmd;
   gchar *user;
   gchar *p;
 
@@ -363,7 +362,7 @@ testing_target_connect (void)
       "-o", "ControlMaster=no",
       "-o", control_path_arg,
       testing_target_name,
-      "nc", "-U", "/var/run/dbus/system_bus_socket",
+      "nc", "-U", bus_path,
       NULL,
   };
 
@@ -372,9 +371,11 @@ testing_target_connect (void)
 
   if (g_test_verbose ())
     {
-      cmd = g_strjoinv (" ", (gchar **)args);
+#if EXTRA_VERBOSE
+      gchar *cmd = g_strjoinv (" ", (gchar **)args);
       g_printerr ("+ %s\n", cmd);
       g_free (cmd);
+#endif
     }
 
   g_spawn_async_with_pipes (NULL, (gchar **)args, NULL,
@@ -409,7 +410,7 @@ testing_target_connect (void)
    * so this is safe enough for testing
    */
   resp = g_string_new ("");
-  if (!read_until_end_or_matches (outfd, "*\n", FALSE, resp))
+  if (!read_until_end_or_matches (outfd, "*\n", resp))
     g_assert_not_reached ();
   g_strstrip (resp->str);
   if (!g_str_has_prefix (resp->str, "OK "))
@@ -436,60 +437,6 @@ testing_target_connect (void)
   g_object_add_weak_pointer (G_OBJECT (connection), (gpointer *)&testing_bus);
 
   return connection;
-}
-
-void
-testing_target_upload (const gchar *dest_path,
-                       const gchar *file,
-                       ...)
-{
-  const gchar * argv[] = {
-      "scp", "-p", "-q",
-      "-o", "ControlMaster=no",
-      "-o", control_path_arg,
-      "--", NULL,
-  };
-
-  GPtrArray *array;
-  GError *error = NULL;
-  gchar *target;
-  gint exit_status;
-  gchar *cmd;
-  va_list va;
-  gint i;
-
-  array = g_ptr_array_new ();
-
-  for (i = 0; argv[i] != NULL; i++)
-    g_ptr_array_add (array, (gchar *)argv[i]);
-
-  va_start (va, file);
-  while (file != NULL)
-    {
-      g_ptr_array_add (array, (gchar *)file);
-      file = va_arg (va, const gchar *);
-    }
-  va_end (va);
-
-  target = g_strdup_printf ("%s:%s", testing_target_name, dest_path);
-  g_ptr_array_add (array, target);
-  g_ptr_array_add (array, NULL);
-
-  if (g_test_verbose ())
-    {
-      cmd = g_strjoinv (" ", (gchar **)array->pdata);
-      g_printerr ("+ %s\n", cmd);
-      g_free (cmd);
-    }
-
-  g_spawn_sync (NULL, (gchar **)array->pdata, NULL, G_SPAWN_SEARCH_PATH,
-                on_child_setup_lifetime, NULL, NULL, NULL, &exit_status, &error);
-  g_assert_no_error (error);
-
-  g_ptr_array_free (array, TRUE);
-  g_free (target);
-
-  g_assert_cmpint (exit_status, ==, 0);
 }
 
 static GPtrArray *
@@ -522,7 +469,10 @@ prepare_target_command (const gchar *prog,
 
   if (g_test_verbose ())
     {
-      cmd = g_strjoinv (" ", (gchar **)array->pdata);
+#if EXTRA_VERBOSE
+      i = 0;
+#endif
+      cmd = g_strjoinv (" ", (gchar **)(array->pdata + i));
       g_printerr ("+ %s\n", cmd);
       g_free (cmd);
     }
@@ -531,7 +481,8 @@ prepare_target_command (const gchar *prog,
 }
 
 void
-testing_target_execute (const gchar *prog,
+testing_target_execute (gchar **output,
+                        const gchar *prog,
                         ...)
 {
   GPtrArray *array;
@@ -544,20 +495,26 @@ testing_target_execute (const gchar *prog,
   va_end (va);
 
   g_spawn_sync (NULL, (gchar **)array->pdata, NULL, G_SPAWN_SEARCH_PATH,
-                on_child_setup_lifetime, NULL, NULL, NULL, &exit_status, &error);
+                on_child_setup_lifetime, NULL, output, NULL, &exit_status, &error);
 
   g_assert_no_error (error);
   g_assert_cmpint (exit_status, ==, 0);
 }
 
-GPid
+typedef struct {
+  GPid pid;
+  GThread *drain;
+  gint infd;
+} Launched;
+
+gpointer
 testing_target_launch (const gchar *wait_until,
                        const gchar *prog,
                        ...)
 {
+  Launched *launched;
   GPtrArray *array;
   GError *error = NULL;
-  GPid pid;
   gint outfd;
   va_list va;
 
@@ -565,10 +522,15 @@ testing_target_launch (const gchar *wait_until,
   array = prepare_target_command (prog, va);
   va_end (va);
 
+  launched = g_new0 (Launched, 1);
+
   g_spawn_async_with_pipes (NULL, (gchar **)array->pdata, NULL,
                             G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
-                            on_child_setup_lifetime, NULL, &pid, NULL,
-                            wait_until ? &outfd : NULL, NULL, &error);
+                            on_child_setup_lifetime, NULL, &launched->pid,
+                            &launched->infd, &outfd, NULL, &error);
+
+  g_assert_no_error (error);
+  g_ptr_array_free (array, TRUE);
 
   /*
    * Wait until the output matches the pattern spec, and then since we grabbed
@@ -576,17 +538,45 @@ testing_target_launch (const gchar *wait_until,
    */
 
   if (wait_until)
-    {
-      read_until_end_or_matches (outfd, wait_until, TRUE, NULL);
-      g_thread_unref (g_thread_new ("drain-thread", drain_thread, GINT_TO_POINTER (outfd)));
-    }
+    read_until_end_or_matches (outfd, wait_until, NULL);
 
-  g_assert_no_error (error);
-  g_ptr_array_free (array, TRUE);
+  launched->drain = g_thread_new ("drain-thread", drain_thread, GINT_TO_POINTER (outfd));
 
-  return pid;
+  return launched;
 }
 
+gint
+testing_target_wait (gpointer launch)
+{
+  Launched *launched = launch;
+  gint exit_status;
+
+  g_warn_if_fail (close (launched->infd) >= 0);
+  g_thread_join (launched->drain);
+  g_warn_if_fail (waitpid (launched->pid, &exit_status, 0) >= 0);
+
+  g_free (launched);
+  return exit_status;
+}
+
+void
+testing_assertion_message (const gchar *log_domain,
+                           const gchar *file,
+                           gint line,
+                           const gchar *func,
+                           const gchar *format,
+                           ...)
+{
+  gchar *message;
+  va_list va;
+
+  va_start (va, format);
+  message = g_strdup_vprintf (format, va);
+  va_end (va);
+
+  g_assertion_message (log_domain, file, line, func, message);
+  g_free (message);
+}
 
 struct _TestingIOStream {
   GIOStream parent;

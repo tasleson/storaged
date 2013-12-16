@@ -10,8 +10,8 @@ EXTRA_DIST = \
 AM_CPPFLAGS = \
 	-I$(top_builddir) -I$(top_srcdir)	 		\
 	-I$(top_builddir)/src -I$(top_srcdir)/src 		\
-	-DSRCDIR=\""$(abs_srcdir)"\"				\
-	-DBUILDDIR=\""$(abs_builddir)"\"			\
+	-DSRCDIR=\""$(abs_top_srcdir)"\"			\
+	-DBUILDDIR=\""$(abs_top_builddir)"\"			\
 	$(POLKIT_GOBJECT_1_CFLAGS) 				\
 	$(GUDEV_CFLAGS) 					\
 	$(GLIB_CFLAGS) 						\

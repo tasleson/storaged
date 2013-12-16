@@ -70,38 +70,18 @@ testing_list_objects (GDBusConnection *connection,
 
 typedef struct {
   GDBusConnection *bus;
-  GPid daemon;
+  gpointer daemon;
 } Test;
 
 static void
 setup_target (Test *test,
               gconstpointer data)
 {
-  static gboolean first = FALSE;
-
-  if (!first)
-    {
-      first = TRUE;
-
-      /* To better allow replacement of running executable, by upload below */
-      testing_target_execute ("rm", "-f",
-                              "./udisks-lvm",
-                              "./udisks-lvm-helper",
-                              NULL);
-
-      testing_target_upload (".",
-                             BUILDDIR "/../udisks-lvm",
-                             BUILDDIR "/../udisks-lvm-helper",
-                             NULL);
-
-      testing_target_upload ("/etc/dbus-1/system.d",
-                             BUILDDIR "/../../data/com.redhat.lvm2.conf",
-                             NULL);
-    }
-
   test->bus = testing_target_connect ();
   test->daemon = testing_target_launch ("*Acquired*on the system message bus*",
-                                        "./udisks-lvm", "--resource-dir=./", "--replace", "--debug",
+                                        BUILDDIR "/src/udisks-lvm",
+                                        "--resource-dir=" BUILDDIR "/src",
+                                        "--replace", "--debug",
                                         NULL);
 }
 
@@ -109,7 +89,8 @@ static void
 teardown_target (Test *test,
                  gconstpointer data)
 {
-  kill (test->daemon, SIGTERM);
+  gint status = testing_target_wait (test->daemon);
+  g_assert_cmpint (status, ==, 0);
   g_clear_object (&test->bus);
 }
 

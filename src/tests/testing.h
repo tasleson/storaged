@@ -23,22 +23,23 @@
 
 #include <gio/gio.h>
 
+#include <string.h>
+
 extern const gchar * testing_target_name;
 
 gboolean             testing_target_init            (void);
 
 GDBusConnection *    testing_target_connect         (void);
 
-void                 testing_target_execute         (const gchar *prog,
-                                                     ...) G_GNUC_NULL_TERMINATED;
-
-GPid                 testing_target_launch          (const gchar *wait_until,
+void                 testing_target_execute         (gchar **output,
                                                      const gchar *prog,
                                                      ...) G_GNUC_NULL_TERMINATED;
 
-void                 testing_target_upload          (const gchar *dest_path,
-                                                     const gchar *file,
+gpointer             testing_target_launch          (const gchar *wait_until,
+                                                     const gchar *prog,
                                                      ...) G_GNUC_NULL_TERMINATED;
+
+gint                 testing_target_wait            (gpointer launched);
 
 #define TESTING_TYPE_IO_STREAM    (testing_io_stream_get_type ())
 #define TESTING_IO_STREAM(o)      (G_TYPE_CHECK_INSTANCE_CAST ((o), TESTING_TYPE_IO_STREAM, TestingIOStream))
@@ -50,5 +51,32 @@ GType            testing_io_stream_get_type       (void);
 
 GIOStream *      testing_io_stream_new            (GInputStream *input,
                                                    GOutputStream *output);
+
+#ifndef g_assert_str_contains
+#define g_assert_str_contains(s1, s2) G_STMT_START { \
+  const char *__s1 = (s1), *__s2 = (s2); \
+  if (strstr (__s1, __s2) != NULL) ; else \
+    testing_assertion_message (G_LOG_DOMAIN, __FILE__, __LINE__, G_STRFUNC, \
+                               "assertion failed (%s): (\"%s\", \"%s\")", \
+                               #s1 " does not contain " #s2, __s1, __s2); \
+} G_STMT_END
+#endif
+
+#ifndef g_assert_str_matches
+#define g_assert_str_matches(s1, s2) G_STMT_START { \
+  const char *__s1 = (s1), *__s2 = (s2); \
+  if (g_pattern_match_simple (__s2, __s1)) ; else \
+    testing_assertion_message (G_LOG_DOMAIN, __FILE__, __LINE__, G_STRFUNC, \
+                               "assertion failed (%s): (\"%s\", \"%s\")", \
+                               #s1 " does not match " #s2, __s1, __s2); \
+  } G_STMT_END
+#endif
+
+void             testing_assertion_message        (const gchar *log_domain,
+                                                   const gchar *file,
+                                                   gint line,
+                                                   const gchar *func,
+                                                   const gchar *format,
+                                                   ...) G_GNUC_PRINTF (5, 6);
 
 #endif /* __TESTING_IO_STREAM_H__ */
