@@ -170,6 +170,42 @@ AC_SUBST([GETTEXT_PACKAGE])
 AM_GLIB_GNU_GETTEXT
 AC_DEFINE_UNQUOTED([GETTEXT_PACKAGE],["$GETTEXT_PACKAGE"],[gettext domain])
 
+# Coverage
+#
+
+AC_MSG_CHECKING([whether to build with gcov testing])
+AC_ARG_ENABLE([coverage],
+              AS_HELP_STRING([--enable-coverage],
+                             [Whether to enable coverage testing ]),
+              [], [enable_coverage=no])
+AC_MSG_RESULT([$enable_coverage])
+
+AS_IF([test "$enable_coverage" = "yes"], [
+  AS_IF([test "$GCC" != "yes"], [
+    AC_MSG_ERROR(Coverage testing requires GCC)
+  ])
+  AC_PATH_PROG(GCOV, gcov, no)
+  AS_IF([test "$GCOV" = "no"], [
+    AC_MSG_ERROR(gcov tool is not available)
+  ])
+  AC_PATH_PROG(LCOV, lcov, no)
+  AS_IF([test "$LCOV" = "no"], [
+    AC_MSG_ERROR(lcov tool is not installed)
+  ])
+  AC_PATH_PROG(GENHTML, genhtml, no)
+  AS_IF([test "$GENHTML" = "no"], [
+    AC_MSG_ERROR(lcov's genhtml tool is not installed)
+  ])
+
+  CFLAGS="$CFLAGS -O0 -g -fprofile-arcs -ftest-coverage"
+  LDFLAGS="$LDFLAGS -lgcov"
+])
+
+AM_CONDITIONAL([WITH_COVERAGE], [test "$enable_coverage" = "yes"])
+AC_SUBST(LCOV)
+AC_SUBST(GCOV)
+AC_SUBST(GENHTML)
+
 # Generate
 #
 
@@ -209,5 +245,6 @@ echo "
         cppflags:                   ${CPPFLAGS}
 
         Maintainer mode:            ${USE_MAINTAINER_MODE}
+        Coverage:                   ${enable_coverage}
         Building man pages:         ${enable_man}
 "
