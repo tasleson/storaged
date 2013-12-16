@@ -56,11 +56,11 @@ struct _UlPhysicalVolumeClass
   UDisksPhysicalVolumeSkeletonClass parent_class;
 };
 
-static void physical_volume_iface_init (UDisksPhysicalVolumeIface *iface);
+static void physical_volume_iface_init (LvmPhysicalVolumeBlockIface *iface);
 
 G_DEFINE_TYPE_WITH_CODE (UlPhysicalVolume, ul_physical_volume,
-                         UDISKS_TYPE_PHYSICAL_VOLUME_SKELETON,
-                         G_IMPLEMENT_INTERFACE (UDISKS_TYPE_PHYSICAL_VOLUME, physical_volume_iface_init));
+                         LVM_TYPE_PHYSICAL_VOLUME_BLOCK_SKELETON,
+                         G_IMPLEMENT_INTERFACE (LVM_TYPE_PHYSICAL_VOLUME_BLOCK, physical_volume_iface_init));
 
 /* ---------------------------------------------------------------------------------------------------- */
 
@@ -121,6 +121,6 @@ ul_physical_volume_update (UlPhysicalVolume *self,
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
-physical_volume_iface_init (UDisksPhysicalVolumeIface *iface)
+physical_volume_iface_init (LvmPhysicalVolumeBlockIface *iface)
 {
 }
