@@ -34,7 +34,7 @@ libtesting_la_SOURCES = \
 	$(NULL)
 
 TEST_PROGS = \
-	test-info \
+	test-block \
 	$(NULL)
 
 TESTS = \
