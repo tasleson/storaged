@@ -75,7 +75,7 @@ enum
   PROP_NAME,
 };
 
-G_DEFINE_TYPE (UlVolumeGroupObject, ul_volume_group_object, UDISKS_TYPE_OBJECT_SKELETON);
+G_DEFINE_TYPE (UlVolumeGroupObject, ul_volume_group_object, LVM_TYPE_OBJECT_SKELETON);
 
 static void
 ul_volume_group_object_finalize (GObject *obj)
