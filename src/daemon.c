@@ -279,14 +279,14 @@ on_job_completed (UDisksJob *job,
                   gpointer user_data)
 {
   UlDaemon *self = UL_DAEMON (user_data);
-  UDisksObjectSkeleton *object;
+  GDBusObject *object;
 
-  object = UDISKS_OBJECT_SKELETON (g_dbus_interface_get_object (G_DBUS_INTERFACE (job)));
+  object = g_dbus_interface_get_object (G_DBUS_INTERFACE (job));
   g_assert (object != NULL);
 
   /* Unexport job */
   g_dbus_object_manager_server_unexport (self->object_manager,
-                                         g_dbus_object_get_object_path (G_DBUS_OBJECT (object)));
+                                         g_dbus_object_get_object_path (object));
   g_object_unref (object);
 
   /* free the allocated job object */
