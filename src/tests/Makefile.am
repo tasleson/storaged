@@ -35,7 +35,7 @@ libtesting_la_SOURCES = \
 
 TEST_PROGS = \
 	test-block \
-	test-lvm \
+	test-react \
 	$(NULL)
 
 TESTS = \
