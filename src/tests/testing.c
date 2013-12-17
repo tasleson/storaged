@@ -55,8 +55,6 @@
  * channels over that one.
  */
 
-#define EXTRA_VERBOSE 0
-
 /* Global setup by testing_target_init() */
 const gchar *testing_target_name = NULL;
 static GPid control_master_pid = 0;
@@ -130,7 +128,6 @@ testing_target_cleanup (void)
   g_unlink (control_path_arg + control_path_prefix_len);
 }
 
-#if EXTRA_VERBOSE
 static gboolean
 write_all (int fd,
            const gchar *data,
@@ -145,7 +142,7 @@ write_all (int fd,
         {
           if (errno != EAGAIN && errno != EINTR)
             {
-              g_critical ("coudln't write out: %s", g_strerror (errno));
+              g_critical ("couldn't write out: %s", g_strerror (errno));
               return FALSE;
             }
         }
@@ -158,14 +155,18 @@ write_all (int fd,
 
   return TRUE;
 }
-#endif
 
 static gpointer
 drain_thread (gpointer data)
 {
   gint fd = GPOINTER_TO_INT (data);
   gchar buf[256];
+  const gchar *env;
   gssize ret;
+  gboolean echo;
+
+  env = g_getenv ("G_MESSAGES_DEBUG");
+  echo = (env && strstr (env, "all"));
 
   for (;;)
     {
@@ -184,10 +185,11 @@ drain_thread (gpointer data)
         }
       else if (ret > 0)
         {
-#if EXTRA_VERBOSE
-          if (!write_all (1, buf, ret))
-            break;
-#endif
+          if (echo)
+            {
+              if (!write_all (1, buf, ret))
+                break;
+            }
         }
     }
 
@@ -203,6 +205,8 @@ read_until_end_or_matches (int fd,
   GPatternSpec *spec = NULL;
   GString *input = NULL;
   gboolean rval = FALSE;
+  const gchar *env;
+  gboolean echo;
   gsize len;
   gssize ret;
 
@@ -210,6 +214,9 @@ read_until_end_or_matches (int fd,
     spec = g_pattern_spec_new (pattern);
   if (!data)
     input = data = g_string_new ("");
+
+  env = g_getenv ("G_MESSAGES_DEBUG");
+  echo = (env && strstr (env, "all"));
 
   for (;;)
     {
@@ -232,9 +239,8 @@ read_until_end_or_matches (int fd,
         }
       else if (ret > 0)
         {
-#if EXTRA_VERBOSE
-          write_all (1, data->str + len, ret);
-#endif
+          if (echo)
+            write_all (1, data->str + len, ret);
 
           data->len = len + ret;
           data->str[data->len] = '\0';
@@ -295,21 +301,18 @@ control_master_start (void)
       g_unlink (control_path_arg + control_path_prefix_len);
     }
 
-#if EXTRA_VERBOSE
-  if (g_test_verbose ())
-    {
-      gchar *cmd = g_strjoinv (" ", (gchar **)args);
-      g_printerr ("+ \n", cmd);
-      g_free (cmd);
-    }
-#endif
-
   /* And run the ssh control master */
   g_spawn_async_with_pipes (NULL, (gchar **)args, NULL,
                             G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
                             on_child_setup_lifetime, NULL, &control_master_pid,
                             NULL, &outfd, NULL, &error);
-  g_assert_no_error (error);
+  if (error)
+    {
+      gchar *cmd = g_strjoinv (" ", (gchar **)args);
+      g_prefix_error (&error, "Couldn't run: %s: ", cmd);
+      g_free (cmd);
+      g_assert_no_error (error);
+    }
 
   /* Read the stdout of the id command */
   userid = g_string_new ("");
@@ -369,20 +372,18 @@ testing_target_connect (void)
   if (testing_bus)
     return g_object_ref (testing_bus);
 
-  if (g_test_verbose ())
-    {
-#if EXTRA_VERBOSE
-      gchar *cmd = g_strjoinv (" ", (gchar **)args);
-      g_printerr ("+ %s\n", cmd);
-      g_free (cmd);
-#endif
-    }
-
   g_spawn_async_with_pipes (NULL, (gchar **)args, NULL,
                             G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
                             on_child_setup_lifetime, NULL, NULL,
                             &infd, &outfd, NULL, &error);
-  g_assert_no_error (error);
+
+  if (error)
+    {
+      gchar *cmd = g_strjoinv (" ", (gchar **)args);
+      g_prefix_error (&error, "Couldn't run: %s: ", cmd);
+      g_free (cmd);
+      g_assert_no_error (error);
+    }
 
   output = g_unix_output_stream_new (infd, TRUE);
 
@@ -469,9 +470,6 @@ prepare_target_command (const gchar *prog,
 
   if (g_test_verbose ())
     {
-#if EXTRA_VERBOSE
-      i = 0;
-#endif
       cmd = g_strjoinv (" ", (gchar **)(array->pdata + i));
       g_printerr ("+ %s\n", cmd);
       g_free (cmd);
@@ -497,7 +495,14 @@ testing_target_execute (gchar **output,
   g_spawn_sync (NULL, (gchar **)array->pdata, NULL, G_SPAWN_SEARCH_PATH,
                 on_child_setup_lifetime, NULL, output, NULL, &exit_status, &error);
 
-  g_assert_no_error (error);
+  if (error)
+    {
+      gchar *cmd = g_strjoinv (" ", (gchar **)array->pdata);
+      g_prefix_error (&error, "Couldn't run: %s: ", cmd);
+      g_free (cmd);
+      g_assert_no_error (error);
+    }
+
   g_assert_cmpint (exit_status, ==, 0);
 }
 
