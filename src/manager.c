@@ -117,6 +117,7 @@ lvm_update_from_variant (GPid pid,
       if (group == NULL)
         {
           group = ul_volume_group_object_new (name);
+          g_debug ("adding volume group: %s", name);
           g_hash_table_insert (self->name_to_volume_group, g_strdup (name), group);
         }
       ul_volume_group_object_update (group);
@@ -237,6 +238,8 @@ on_uevent (GUdevClient *client,
            GUdevDevice *device,
            gpointer user_data)
 {
+  g_debug ("udev event '%s' for %s", action,
+           device ? g_udev_device_get_name (device) : "???");
   handle_block_uevent_for_lvm (user_data, action, device);
 }
 
@@ -587,7 +590,7 @@ handle_volume_group_create (LvmManager *manager,
   if (group_object == NULL)
     {
       g_prefix_error (&error,
-                      "Error waiting for volume group object for %s",
+                      "Error waiting for volume group object: %s: ",
                       arg_name);
       g_dbus_method_invocation_take_error (invocation, error);
       goto out;

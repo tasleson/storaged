@@ -1046,6 +1046,7 @@ ul_daemon_spawn_for_variant (UlDaemon *daemon,
   gchar *prog = NULL;
   GPid pid;
   gint output_fd;
+  gchar *cmd;
 
   /*
    * This is so we can override the location of udisks-lvm-helper
@@ -1057,6 +1058,10 @@ ul_daemon_spawn_for_variant (UlDaemon *daemon,
       prog = ul_daemon_get_resource_path (daemon, TRUE, argv[0]);
       argv[0] = prog;
     }
+
+  cmd = g_strjoinv (" ", (gchar **)argv);
+  g_debug ("spawning for variant: %s", cmd);
+  g_free (cmd);
 
   if (!g_spawn_async_with_pipes (NULL,
                                  (gchar **)argv,

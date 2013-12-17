@@ -349,8 +349,6 @@ child_watch_cb (GPid     pid,
       g_free (buf);
     }
 
-  //g_debug ("helper(pid %5d): completed with exit code %d\n", self->child_pid, WEXITSTATUS (status));
-
   /* take a reference so it's safe for a signal-handler to release the last one */
   g_object_ref (self);
   g_signal_emit (self,
@@ -438,6 +436,8 @@ ul_spawned_job_constructed (GObject *object)
   gchar **child_argv;
 
   G_OBJECT_CLASS (ul_spawned_job_parent_class)->constructed (object);
+
+  g_debug ("spawned job: %s", self->command_line);
 
   self->main_context = g_main_context_get_thread_default ();
   if (self->main_context != NULL)
@@ -769,20 +769,14 @@ udisks_spawned_job_spawned_job_completed_default (UlSpawnedJob *self,
                                                   GString *standard_output,
                                                   GString *standard_error)
 {
-#if 0
-  g_debug ("in ul_spawned_job_spawned_job_completed_default()\n"
-           " command_line `%s'\n"
-           " error->message=`%s'\n"
-           " status=%d (WIFEXITED=%d WEXITSTATUS=%d)\n"
+  g_debug ("spawned job completed: "
+           " status=%d (WIFEXITED=%d WEXITSTATUS=%d) "
            " standard_output=`%s' (%d bytes)\n"
            " standard_error=`%s' (%d bytes)\n",
-           self->command_line,
-           error != NULL ? error->message : "(error not set)",
            status,
            WIFEXITED (status), WEXITSTATUS (status),
            standard_output->str, (gint) standard_output->len,
            standard_error->str, (gint) standard_error->len);
-#endif
 
   if (error != NULL)
     {
@@ -869,7 +863,7 @@ udisks_spawned_job_release_resources (UlSpawnedJob *self)
     {
       GSource *source;
 
-      //g_debug ("ugh, need to kill %d", (gint) self->child_pid);
+      g_debug ("ugh, need to kill %d", (gint) self->child_pid);
       kill (self->child_pid, SIGTERM);
 
       /* OK, we need to reap for the child ourselves - we don't want

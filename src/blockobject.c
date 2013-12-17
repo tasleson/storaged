@@ -450,9 +450,13 @@ ul_block_object_trigger_uevent (UlBlockObject *self)
 
   device = ul_block_object_get_udev (self);
   if (device == NULL)
-    return;
+    {
+      g_debug ("skipping trigger of udev event for block object");
+      return;
+    }
 
   path = g_strconcat (g_udev_device_get_sysfs_path (device), "/uevent", NULL);
+  g_debug ("trigerring udev event '%s' for %s", "change", g_udev_device_get_name (device));
   g_object_unref (device);
 
   fd = open (path, O_WRONLY);
