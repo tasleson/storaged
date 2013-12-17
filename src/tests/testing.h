@@ -72,6 +72,16 @@ GIOStream *      testing_io_stream_new            (GInputStream *input,
   } G_STMT_END
 #endif
 
+#ifndef g_assert_str_prefix
+#define g_assert_str_prefix(s1, s2) G_STMT_START { \
+  const char *__s1 = (s1), *__s2 = (s2); \
+  if (g_str_has_prefix (__s1, __s2)) ; else \
+    testing_assertion_message (G_LOG_DOMAIN, __FILE__, __LINE__, G_STRFUNC, \
+                               "assertion failed (%s): (\"%s\", \"%s\")", \
+                               #s1 " does not have prefix " #s2, __s1, __s2); \
+  } G_STMT_END
+#endif
+
 void             testing_assertion_message        (const gchar *log_domain,
                                                    const gchar *file,
                                                    gint line,
