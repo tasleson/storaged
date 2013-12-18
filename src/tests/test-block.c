@@ -36,11 +36,15 @@ setup_target (Test *test,
 
   test->bus = testing_target_connect ();
 
-  test->daemon = testing_target_launch ("*Acquired*on the system message bus*",
-                                        BUILDDIR "/src/udisks-lvm",
-                                        "--resource-dir=" BUILDDIR "/src",
-                                        "--replace", "--debug",
-                                        NULL);
+  /* If local, expect it to be running */
+  if (testing_target_name)
+    {
+      test->daemon = testing_target_launch ("*Acquired*on the system message bus*",
+                                            BUILDDIR "/src/udisks-lvm",
+                                            "--resource-dir=" BUILDDIR "/src",
+                                            "--replace", "--debug",
+                                            NULL);
+    }
 
   test->objman = g_dbus_object_manager_client_new_sync (test->bus,
                                                         G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_DO_NOT_AUTO_START,
@@ -63,8 +67,11 @@ teardown_target (Test *test,
   g_assert_no_error (error);
   g_clear_object (&test->bus);
 
-  status = testing_target_wait (test->daemon);
-  g_assert_cmpint (status, ==, 0);
+  if (testing_target_name)
+    {
+      status = testing_target_wait (test->daemon);
+      g_assert_cmpint (status, ==, 0);
+    }
 }
 
 static void

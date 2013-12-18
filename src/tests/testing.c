@@ -97,6 +97,10 @@ control_master_stop (void)
       NULL,
   };
 
+  /* Just do local */
+  if (testing_target_name == NULL)
+    return;
+
   if (g_test_verbose ())
     {
       cmd = g_strjoinv (" ", (gchar **)args);
@@ -286,6 +290,10 @@ control_master_start (void)
       NULL,
   };
 
+  /* Just do local */
+  if (testing_target_name == NULL)
+    return;
+
   /* Choose a unique path name */
   g_snprintf (control_path_arg, sizeof (control_path_arg),
               "%s%s/udisks-test-ctrl.XXXXXX",
@@ -332,13 +340,23 @@ gboolean
 testing_target_init (void)
 {
   testing_target_name = g_getenv ("TEST_TARGET");
+
   if (!testing_target_name || !testing_target_name[0])
     {
       g_printerr ("%s: skipping tests due to lack of $TEST_TARGET\n", g_get_prgname ());
       return FALSE;
     }
 
-  control_master_start ();
+  if (g_str_equal (testing_target_name, "abuse-my-build-computer"))
+    {
+      testing_target_name = NULL;
+      if (g_test_verbose ())
+        g_printerr ("%s: abusing local computer, as desired\n", g_get_prgname ());
+    }
+  else
+    {
+      control_master_start ();
+    }
 
   atexit (testing_target_cleanup);
   return TRUE;
@@ -368,6 +386,18 @@ testing_target_connect (void)
       "nc", "-U", bus_path,
       NULL,
   };
+
+  /* Just do local */
+  if (testing_target_name == NULL)
+    {
+      connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, &error);
+      if (error != NULL)
+        {
+          g_critical ("Couldn't get local system bus: %s", error->message);
+          g_clear_error (&error);
+        }
+      return connection;
+    }
 
   if (testing_bus)
     return g_object_ref (testing_bus);
@@ -446,7 +476,7 @@ prepare_target_command (const gchar *prog,
 {
   GPtrArray *array;
   gchar *cmd;
-  gint i;
+  gint i = 0;
 
   const gchar * argv[] = {
       "ssh", "-T",
@@ -457,8 +487,13 @@ prepare_target_command (const gchar *prog,
   };
 
   array = g_ptr_array_new ();
-  for (i = 0; argv[i] != NULL; i++)
-    g_ptr_array_add (array, (gchar *)argv[i]);
+
+  /* Just do local */
+  if (testing_target_name)
+    {
+      for (i = 0; argv[i] != NULL; i++)
+        g_ptr_array_add (array, (gchar *)argv[i]);
+    }
 
   while (prog != NULL)
     {
