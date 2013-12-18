@@ -25,17 +25,23 @@
 
 G_BEGIN_DECLS
 
-void                ul_util_safe_append_to_object_path   (GString *str,
-                                                          const gchar *s);
-
-gchar *             ul_util_escape                  (const gchar *str);
-
-gchar *             ul_util_escape_and_quote        (const gchar *str);
+gchar *             ul_util_build_object_path       (const gchar *base,
+                                                     const gchar *part,
+                                                     ...) G_GNUC_NULL_TERMINATED;
 
 gchar *             ul_util_encode_lvm_name         (const gchar *name,
                                                      gboolean for_logical_volume);
 
 gchar *             ul_util_decode_lvm_name         (const gchar *encoded);
+
+gboolean            ul_util_wipe_block              (const gchar *device_file,
+                                                     GError **error);
+
+gboolean            ul_util_check_status_and_output (const gchar *cmd,
+                                                     gint exit_status,
+                                                     const gchar *standard_output,
+                                                     const gchar *standard_error,
+                                                     GError **error);
 
 /*
  * GLib doesn't have g_info() yet:

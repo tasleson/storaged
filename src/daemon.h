@@ -25,7 +25,7 @@
 
 #include "com.redhat.lvm2.h"
 
-#include "basejob.h"
+#include "job.h"
 
 G_BEGIN_DECLS
 
@@ -33,6 +33,7 @@ G_BEGIN_DECLS
 #define UL_DAEMON(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_DAEMON, UlDaemon))
 #define UL_IS_DAEMON(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_DAEMON))
 
+typedef struct _UlBlock UlBlock;
 typedef struct _UlDaemon UlDaemon;
 typedef struct _UlManager UlManager;
 
@@ -40,15 +41,16 @@ GType                      ul_daemon_get_type            (void) G_GNUC_CONST;
 
 UlDaemon *                 ul_daemon_get                 (void);
 
-GDBusObjectManagerServer * ul_daemon_get_object_manager  (UlDaemon *self);
-
-GList *                    ul_daemon_get_objects         (UlDaemon *self);
-
-LvmObject *                ul_daemon_find_block          (UlDaemon *self,
+UlBlock *                  ul_daemon_find_block          (UlDaemon *self,
                                                           dev_t block_device_number);
 
-GDBusObject *              ul_daemon_find_object         (UlDaemon *self,
-                                                          const gchar *object_path);
+gpointer                   ul_daemon_find_thing          (UlDaemon *self,
+                                                          const gchar *object_path,
+                                                          GType type_of_thing);
+
+GList *                    ul_daemon_get_jobs            (UlDaemon *self);
+
+GList *                    ul_daemon_get_blocks          (UlDaemon *self);
 
 UlManager *                ul_daemon_get_manager         (UlDaemon *self);
 
@@ -56,72 +58,46 @@ gchar *                    ul_daemon_get_resource_path   (UlDaemon *self,
                                                           gboolean arch_specific,
                                                           const gchar *path);
 
-/**
- * UlDaemonWaitFunc:
- * @daemon: A #UlDaemon.
- * @user_data: The #gpointer passed to ul_daemon_wait_for_object_sync().
- *
- * Type for callback function used with ul_daemon_wait_for_object_sync().
- *
- * Returns: (transfer full): %NULL if the object to wait for was not found,
- *          otherwise a full reference to a #GDBusObject.
- */
-typedef GDBusObject * (* UlDaemonWaitFunc)               (UlDaemon *daemon,
-                                                          gpointer user_data);
+void                       ul_daemon_publish             (UlDaemon *self,
+                                                          const gchar *path,
+                                                          gboolean uniquely,
+                                                          gpointer thing);
 
-GDBusObject *         ul_daemon_wait_for_object_sync     (UlDaemon *self,
-                                                          UlDaemonWaitFunc wait_func,
+void                       ul_daemon_unpublish           (UlDaemon *self,
+                                                          const gchar *path,
+                                                          gpointer thing);
+
+UlJob *                    ul_daemon_launch_spawned_job  (UlDaemon *self,
+                                                          gpointer object_or_interface,
+                                                          const gchar *job_operation,
+                                                          uid_t job_started_by_uid,
+                                                          GCancellable *cancellable,
+                                                          uid_t run_as_uid,
+                                                          uid_t run_as_euid,
+                                                          const gchar *input_string,
+                                                          const gchar *first_arg,
+                                                          ...) G_GNUC_NULL_TERMINATED;
+
+UlJob *                    ul_daemon_launch_spawned_jobv (UlDaemon *self,
+                                                          gpointer object_or_interface,
+                                                          const gchar *job_operation,
+                                                          uid_t job_started_by_uid,
+                                                          GCancellable *cancellable,
+                                                          uid_t run_as_uid,
+                                                          uid_t run_as_euid,
+                                                          const gchar *input_string,
+                                                          const gchar **argv);
+
+UlJob *                    ul_daemon_launch_threaded_job (UlDaemon *daemon,
+                                                          gpointer object_or_interface,
+                                                          const gchar *job_operation,
+                                                          uid_t job_started_by_uid,
+                                                          UlJobFunc job_func,
                                                           gpointer user_data,
                                                           GDestroyNotify user_data_free_func,
-                                                          guint timeout_seconds,
-                                                          GError **error);
+                                                          GCancellable *cancellable);
 
-UlBaseJob *           ul_daemon_launch_spawned_job       (UlDaemon *self,
-                                                          LvmObject *object,
-                                                          const gchar *job_operation,
-                                                          uid_t job_started_by_uid,
-                                                          GCancellable *cancellable,
-                                                          uid_t run_as_uid,
-                                                          uid_t run_as_euid,
-                                                          const gchar *input_string,
-                                                          const gchar *command_line_format,
-                                                          ...) G_GNUC_PRINTF (9, 10);
-
-gboolean              ul_daemon_launch_spawned_job_sync  (UlDaemon *self,
-                                                          LvmObject *object,
-                                                          const gchar *job_operation,
-                                                          uid_t job_started_by_uid,
-                                                          GCancellable *cancellable,
-                                                          uid_t run_as_uid,
-                                                          uid_t run_as_euid,
-                                                          gint *out_status,
-                                                          gchar **out_message,
-                                                          const gchar *input_string,
-                                                          const gchar *command_line_format,
-                                                          ...) G_GNUC_PRINTF (11, 12);
-
-gboolean              ul_daemon_check_authorization_sync (UlDaemon *self,
-                                                          LvmObject *object,
-                                                          const gchar *action_id,
-                                                          GVariant *options,
-                                                          const gchar *message,
-                                                          GDBusMethodInvocation *invocation);
-
-gboolean              ul_daemon_get_caller_uid_sync      (UlDaemon *self,
-                                                          GDBusMethodInvocation *invocation,
-                                                          GCancellable *cancellable,
-                                                          uid_t *out_uid,
-                                                          gid_t *out_gid,
-                                                          gchar **out_user_name,
-                                                          GError **error);
-
-gboolean              ul_daemon_get_caller_pid_sync      (UlDaemon *self,
-                                                          GDBusMethodInvocation *invocation,
-                                                          GCancellable *cancellable,
-                                                          pid_t *out_pid,
-                                                          GError **error);
-
-GPid                  ul_daemon_spawn_for_variant        (UlDaemon *self,
+GPid                       ul_daemon_spawn_for_variant   (UlDaemon *self,
                                                           const gchar **argv,
                                                           const GVariantType *type,
                                                           void (*callback) (GPid, GVariant *, GError *, gpointer),

@@ -45,17 +45,17 @@ BUILT_SOURCES = $(dbus_built_sources)
 noinst_LTLIBRARIES = libudisks-lvm.la
 
 libudisks_lvm_la_SOURCES = \
-	basejob.h basejob.c \
-	blockobject.h blockobject.c \
+	block.h block.c \
 	daemon.h daemon.c \
+	invocation.h invocation.c \
+	job.h job.c \
 	logicalvolume.h logicalvolume.c \
-	logicalvolumeobject.h logicalvolumeobject.c \
 	manager.h manager.c \
 	physicalvolume.h physicalvolume.c \
 	spawnedjob.h spawnedjob.c \
+	threadedjob.h threadedjob.c \
 	util.h util.c \
 	volumegroup.h volumegroup.c \
-	volumegroupobject.h volumegroupobject.c \
 	$(dbus_built_sources) \
 	$(NULL)
 

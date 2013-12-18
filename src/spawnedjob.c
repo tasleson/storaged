@@ -22,8 +22,9 @@
 
 #include "spawnedjob.h"
 
-#include "basejob.h"
 #include "daemon.h"
+#include "job.h"
+#include "util.h"
 
 #include <glib/gi18n-lib.h>
 
@@ -55,9 +56,9 @@ typedef struct _UlSpawnedJobClass   UlSpawnedJobClass;
  */
 struct _UlSpawnedJob
 {
-  UlBaseJob parent_instance;
+  UlJob parent_instance;
 
-  gchar *command_line;
+  gchar **argv;
   gulong cancellable_handler_id;
 
   GMainContext *main_context;
@@ -87,7 +88,7 @@ struct _UlSpawnedJob
 
 struct _UlSpawnedJobClass
 {
-  UlBaseJobClass parent_class;
+  UlJobClass parent_class;
 
   gboolean (*spawned_job_completed) (UlSpawnedJob *self,
                                      GError *error,
@@ -101,7 +102,7 @@ static void job_iface_init (UDisksJobIface *iface);
 enum
 {
   PROP_0,
-  PROP_COMMAND_LINE,
+  PROP_ARGV,
   PROP_INPUT_STRING,
   PROP_RUN_AS_UID,
   PROP_RUN_AS_EUID
@@ -123,7 +124,7 @@ static gboolean udisks_spawned_job_spawned_job_completed_default (UlSpawnedJob *
 
 static void udisks_spawned_job_release_resources (UlSpawnedJob *self);
 
-G_DEFINE_TYPE_WITH_CODE (UlSpawnedJob, ul_spawned_job, UL_TYPE_BASE_JOB,
+G_DEFINE_TYPE_WITH_CODE (UlSpawnedJob, ul_spawned_job, UL_TYPE_JOB,
                          G_IMPLEMENT_INTERFACE (UDISKS_TYPE_JOB, job_iface_init)
 );
 
@@ -137,7 +138,7 @@ ul_spawned_job_finalize (GObject *object)
   if (self->main_context != NULL)
     g_main_context_unref (self->main_context);
 
-  g_free (self->command_line);
+  g_strfreev (self->argv);
 
   /* input string may contain key material - nuke contents */
   if (self->input_string != NULL)
@@ -159,8 +160,8 @@ ul_spawned_job_get_property (GObject *object,
 
   switch (prop_id)
     {
-    case PROP_COMMAND_LINE:
-      g_value_set_string (value, ul_spawned_job_get_command_line (self));
+    case PROP_ARGV:
+      g_value_set_boxed (value, ul_spawned_job_get_argv (self));
       break;
 
     default:
@@ -179,9 +180,9 @@ ul_spawned_job_set_property (GObject *object,
 
   switch (prop_id)
     {
-    case PROP_COMMAND_LINE:
-      g_assert (self->command_line == NULL);
-      self->command_line = g_value_dup_string (value);
+    case PROP_ARGV:
+      g_assert (self->argv == NULL);
+      self->argv = g_value_dup_boxed (value);
       break;
 
     case PROP_INPUT_STRING:
@@ -432,12 +433,12 @@ ul_spawned_job_constructed (GObject *object)
 {
   UlSpawnedJob *self = UL_SPAWNED_JOB (object);
   GError *error;
-  gint child_argc;
-  gchar **child_argv;
+  gchar *cmd;
 
   G_OBJECT_CLASS (ul_spawned_job_parent_class)->constructed (object);
 
-  g_debug ("spawned job: %s", self->command_line);
+  cmd = g_strjoinv (" ", self->argv);
+  g_debug ("spawned job: %s", cmd);
 
   self->main_context = g_main_context_get_thread_default ();
   if (self->main_context != NULL)
@@ -445,35 +446,21 @@ ul_spawned_job_constructed (GObject *object)
 
   /* could already be cancelled */
   error = NULL;
-  if (g_cancellable_set_error_if_cancelled (ul_base_job_get_cancellable (UL_BASE_JOB (self)), &error))
+  if (g_cancellable_set_error_if_cancelled (ul_job_get_cancellable (UL_JOB (self)), &error))
     {
       emit_completed_with_error_in_idle (self, error);
       g_error_free (error);
       goto out;
     }
 
-  self->cancellable_handler_id = g_cancellable_connect (ul_base_job_get_cancellable (UL_BASE_JOB (self)),
+  self->cancellable_handler_id = g_cancellable_connect (ul_job_get_cancellable (UL_JOB (self)),
                                                         G_CALLBACK (on_cancelled),
                                                         self,
                                                         NULL);
 
   error = NULL;
-  if (!g_shell_parse_argv (self->command_line,
-                           &child_argc,
-                           &child_argv,
-                           &error))
-    {
-      g_prefix_error (&error,
-                      "Error parsing command-line `%s': ",
-                      self->command_line);
-      emit_completed_with_error_in_idle (self, error);
-      g_error_free (error);
-      goto out;
-    }
-
-  error = NULL;
   if (!g_spawn_async_with_pipes (NULL, /* working directory */
-                                 child_argv,
+                                 self->argv,
                                  NULL, /* envp */
                                  G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD,
                                  child_setup, /* child_setup */
@@ -484,9 +471,7 @@ ul_spawned_job_constructed (GObject *object)
                                  &(self->child_stderr_fd),
                                  &error))
     {
-      g_prefix_error (&error,
-                      "Error spawning command-line `%s': ",
-                      self->command_line);
+      g_prefix_error (&error, "Error spawning command-line `%s': ", cmd);
       emit_completed_with_error_in_idle (self, error);
       g_error_free (error);
       goto out;
@@ -523,8 +508,8 @@ ul_spawned_job_constructed (GObject *object)
   g_source_attach (self->child_stderr_source, self->main_context);
   g_source_unref (self->child_stderr_source);
 
- out:
-  ;
+out:
+  g_free (cmd);
 }
 
 static void
@@ -551,20 +536,20 @@ ul_spawned_job_class_init (UlSpawnedJobClass *klass)
   gobject_class->get_property = ul_spawned_job_get_property;
 
   /**
-   * UlSpawnedJob:command-line:
+   * UlSpawnedJob:argv:
    *
    * The command-line to run.
    */
   g_object_class_install_property (gobject_class,
-                                   PROP_COMMAND_LINE,
-                                   g_param_spec_string ("command-line",
-                                                        "Command Line",
-                                                        "The command-line to run",
-                                                        NULL,
-                                                        G_PARAM_READABLE |
-                                                        G_PARAM_WRITABLE |
-                                                        G_PARAM_CONSTRUCT_ONLY |
-                                                        G_PARAM_STATIC_STRINGS));
+                                   PROP_ARGV,
+                                   g_param_spec_boxed ("argv",
+                                                       "Arguments",
+                                                       "Argument vector",
+                                                       G_TYPE_STRV,
+                                                       G_PARAM_READABLE |
+                                                       G_PARAM_WRITABLE |
+                                                       G_PARAM_CONSTRUCT_ONLY |
+                                                       G_PARAM_STATIC_STRINGS));
 
   /**
    * UlSpawnedJob:input-string:
@@ -659,7 +644,7 @@ ul_spawned_job_class_init (UlSpawnedJobClass *klass)
 
 /**
  * udisks_spawned_job_new:
- * @command_line: The command line to run.
+ * @argv: The command line to run.
  * @input_string: A string to write to stdin of the spawned program or %NULL.
  * @run_as_uid: The #uid_t to run the program as.
  * @run_as_euid: The effective #uid_t to run the program as.
@@ -675,18 +660,18 @@ ul_spawned_job_class_init (UlSpawnedJobClass *klass)
  * Returns: A new #UlSpawnedJob. Free with g_object_unref().
  */
 UlSpawnedJob *
-ul_spawned_job_new (const gchar *command_line,
+ul_spawned_job_new (const gchar **argv,
                     const gchar *input_string,
                     uid_t run_as_uid,
                     uid_t run_as_euid,
                     UlDaemon *daemon,
                     GCancellable *cancellable)
 {
-  g_return_val_if_fail (command_line != NULL, NULL);
+  g_return_val_if_fail (argv != NULL, NULL);
   g_return_val_if_fail (cancellable == NULL || G_IS_CANCELLABLE (cancellable), NULL);
 
   return g_object_new (UL_TYPE_SPAWNED_JOB,
-                       "command-line", command_line,
+                       "argv", argv,
                        "input-string", input_string,
                        "run-as-uid", run_as_uid,
                        "run-as-euid", run_as_euid,
@@ -696,18 +681,18 @@ ul_spawned_job_new (const gchar *command_line,
 }
 
 /**
- * udisks_spawned_job_get_command_line:
+ * udisks_spawned_job_get_argv:
  * @job: A #UlSpawnedJob.
  *
  * Gets the command line that @job was constructed with.
  *
  * Returns: A string owned by @job. Do not free.
  */
-const gchar *
-ul_spawned_job_get_command_line (UlSpawnedJob *self)
+const gchar **
+ul_spawned_job_get_argv (UlSpawnedJob *self)
 {
   g_return_val_if_fail (UL_IS_SPAWNED_JOB (self), NULL);
-  return self->command_line;
+  return (const gchar **)self->argv;
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
@@ -715,52 +700,11 @@ ul_spawned_job_get_command_line (UlSpawnedJob *self)
 static void
 job_iface_init (UDisksJobIface *iface)
 {
-  /* For Cancel(), just use the implementation from our super class (UlBaseJob) */
+  /* For Cancel(), just use the implementation from our super class (UlJob) */
   /* iface->handle_cancel   = handle_cancel; */
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
-
-static const gchar *
-get_signal_name (gint signal_number)
-{
-  switch (signal_number)
-    {
-#define _HANDLE_SIG(sig) case sig: return #sig;
-    _HANDLE_SIG (SIGHUP);
-    _HANDLE_SIG (SIGINT);
-    _HANDLE_SIG (SIGQUIT);
-    _HANDLE_SIG (SIGILL);
-    _HANDLE_SIG (SIGABRT);
-    _HANDLE_SIG (SIGFPE);
-    _HANDLE_SIG (SIGKILL);
-    _HANDLE_SIG (SIGSEGV);
-    _HANDLE_SIG (SIGPIPE);
-    _HANDLE_SIG (SIGALRM);
-    _HANDLE_SIG (SIGTERM);
-    _HANDLE_SIG (SIGUSR1);
-    _HANDLE_SIG (SIGUSR2);
-    _HANDLE_SIG (SIGCHLD);
-    _HANDLE_SIG (SIGCONT);
-    _HANDLE_SIG (SIGSTOP);
-    _HANDLE_SIG (SIGTSTP);
-    _HANDLE_SIG (SIGTTIN);
-    _HANDLE_SIG (SIGTTOU);
-    _HANDLE_SIG (SIGBUS);
-    _HANDLE_SIG (SIGPOLL);
-    _HANDLE_SIG (SIGPROF);
-    _HANDLE_SIG (SIGSYS);
-    _HANDLE_SIG (SIGTRAP);
-    _HANDLE_SIG (SIGURG);
-    _HANDLE_SIG (SIGVTALRM);
-    _HANDLE_SIG (SIGXCPU);
-    _HANDLE_SIG (SIGXFSZ);
-#undef _HANDLE_SIG
-    default:
-      break;
-    }
-  return "UNKNOWN_SIGNAL";
-}
 
 static gboolean
 udisks_spawned_job_spawned_job_completed_default (UlSpawnedJob *self,
@@ -790,54 +734,22 @@ udisks_spawned_job_spawned_job_completed_default (UlSpawnedJob *self,
                                  message);
       g_free (message);
     }
-  else if (WIFEXITED (status) && WEXITSTATUS (status) == 0)
+  else if (ul_util_check_status_and_output (self->argv[0],
+                                            status,
+                                            standard_error->str,
+                                            standard_output->str,
+                                            &error))
     {
       udisks_job_emit_completed (UDISKS_JOB (self),
-                                 TRUE,
-                                 standard_error->str);
+                                 TRUE, standard_error->str);
     }
   else
     {
-      GString *message;
-      message = g_string_new (NULL);
-      if (WIFEXITED (status))
-        {
-          g_string_append_printf (message,
-                                  "Command-line `%s' exited with non-zero exit status %d:",
-                                  self->command_line,
-                                  WEXITSTATUS (status));
-        }
-      else if (WIFSIGNALED (status))
-        {
-          g_string_append_printf (message,
-                                  "Command-line `%s' was signaled with signal %s (%d):",
-                                  self->command_line,
-                                  get_signal_name (WTERMSIG (status)),
-                                  WTERMSIG (status));
-        }
-      if (standard_output->len > 0 && standard_error->len)
-        {
-          g_string_append_printf (message,
-                                  "\n"
-                                  "stdout: `%s'\n"
-                                  "stderr: `%s'",
-                                  standard_output->str,
-                                  standard_error->str);
-        }
-      else if (standard_output->len > 0)
-        {
-          g_string_append_printf (message, " %s", standard_output->str);
-        }
-      else
-        {
-          g_string_append_printf (message, " %s", standard_error->str);
-        }
-
       udisks_job_emit_completed (UDISKS_JOB (self),
-                                 FALSE,
-                                 message->str);
-      g_string_free (message, TRUE);
+                                 FALSE, error->message);
+      g_error_free (error);
     }
+
   return TRUE;
 }
 
@@ -950,7 +862,7 @@ udisks_spawned_job_release_resources (UlSpawnedJob *self)
 
   if (self->cancellable_handler_id > 0)
     {
-      g_cancellable_disconnect (ul_base_job_get_cancellable (UL_BASE_JOB (self)),
+      g_cancellable_disconnect (ul_job_get_cancellable (UL_JOB (self)),
                                 self->cancellable_handler_id);
       self->cancellable_handler_id = 0;
     }

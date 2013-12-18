@@ -22,8 +22,15 @@
 
 #include "util.h"
 
+#include <sys/ioctl.h>
+#include <sys/wait.h>
+#include <linux/fs.h>
+
 #include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <string.h>
+#include <unistd.h>
 
 /**
  * udisks_safe_append_to_object_path:
@@ -38,9 +45,9 @@
  * Note that his mapping is not bijective - e.g. you cannot go back
  * to the original string.
  */
-void
-ul_util_safe_append_to_object_path (GString *str,
-                                    const gchar *s)
+static void
+safe_append_to_object_path (GString *str,
+                            const gchar *s)
 {
   guint n;
   for (n = 0; s[n] != '\0'; n++)
@@ -62,73 +69,29 @@ ul_util_safe_append_to_object_path (GString *str,
     }
 }
 
-static void
-escaper (GString *s, const gchar *str)
+gchar *
+ul_util_build_object_path (const gchar *base,
+                           const gchar *part,
+                           ...)
 {
-  const gchar *p;
-  for (p = str; *p != '\0'; p++)
+  GString *path;
+  va_list va;
+
+  g_return_val_if_fail (base != NULL, NULL);
+  g_return_val_if_fail (!g_str_has_suffix (base, "/"), NULL);
+
+  path = g_string_new (base);
+
+  va_start (va, part);
+  while (part != NULL)
     {
-      gint c = *p;
-      switch (c)
-        {
-        case '"':
-          g_string_append (s, "\\\"");
-          break;
-
-        case '\\':
-          g_string_append (s, "\\\\");
-          break;
-
-        default:
-          g_string_append_c (s, c);
-          break;
-        }
+      g_string_append_c (path, '/');
+      safe_append_to_object_path (path, part);
+      part = va_arg (va, const gchar *);
     }
-}
+  va_end (va);
 
-/**
- * ul_util_escape_and_quote:
- * @str: The string to escape.
- *
- * Like ul_util_escape() but also wraps the result in
- * double-quotes.
- *
- * Returns: The double-quoted and escaped string. Free with g_free().
- */
-gchar *
-ul_util_escape_and_quote (const gchar *str)
-{
-  GString *s;
-
-  g_return_val_if_fail (str != NULL, NULL);
-
-  s = g_string_new ("\"");
-  escaper (s, str);
-  g_string_append_c (s, '"');
-
-  return g_string_free (s, FALSE);
-}
-
-/**
- * ul_util_escape:
- * @str: The string to escape.
- *
- * Escapes double-quotes (&quot;) and back-slashes (\) in a string
- * using back-slash (\).
- *
- * Returns: The escaped string. Free with g_free().
- */
-gchar *
-ul_util_escape (const gchar *str)
-{
-  GString *s;
-
-  g_return_val_if_fail (str != NULL, NULL);
-
-  s = g_string_new (NULL);
-  escaper (s, str);
-
-  return g_string_free (s, FALSE);
+  return g_string_free (path, FALSE);
 }
 
 static gboolean
@@ -219,4 +182,164 @@ ul_util_decode_lvm_name (const gchar *encoded)
   decoded = dec->str;
   g_string_free (dec, FALSE);
   return decoded;
+}
+
+gboolean
+ul_util_wipe_block (const gchar *device_file,
+                    GError **error)
+{
+  int fd = -1;
+  gchar zeroes[512];
+  gchar *standard_output;
+  gchar *standard_error;
+  gint exit_status;
+
+  const gchar *argv[] = { "wipefs", "-a", device_file, NULL };
+
+  /* Remove partition table */
+  memset (zeroes, 0, 512);
+  fd = open (device_file, O_RDWR | O_EXCL);
+  if (fd < 0)
+    {
+      g_set_error (error, UDISKS_ERROR, UDISKS_ERROR_FAILED,
+                   "Error opening device %s: %m", device_file);
+      return FALSE;
+    }
+
+  if (write (fd, zeroes, 512) != 512)
+    {
+      g_set_error (error, UDISKS_ERROR, UDISKS_ERROR_FAILED,
+                   "Error erasing device %s: %m", device_file);
+      close (fd);
+      return FALSE;
+    }
+
+  if (ioctl (fd, BLKRRPART, NULL) < 0)
+    {
+      /* EINVAL returned if not partitioned */
+      if (errno != EINVAL)
+        {
+          g_set_error (error, UDISKS_ERROR, UDISKS_ERROR_FAILED,
+                       "Error removing partition devices of %s: %m", device_file);
+          close (fd);
+          return FALSE;
+        }
+    }
+
+  close (fd);
+
+  /* wipe other labels */
+  if (!g_spawn_sync (NULL,
+                     (gchar **)argv,
+                     NULL,
+                     G_SPAWN_SEARCH_PATH,
+                     NULL,
+                     NULL,
+                     &standard_output,
+                     &standard_error,
+                     &exit_status,
+                     error))
+    return FALSE;
+
+  if (!g_spawn_check_exit_status (exit_status, error))
+    {
+      g_prefix_error (error, "stdout: '%s', stderr: '%s', ", standard_output, standard_error);
+      g_free (standard_output);
+      g_free (standard_error);
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+
+static const gchar *
+get_signal_name (gint signal_number)
+{
+  switch (signal_number)
+    {
+#define _HANDLE_SIG(sig) case sig: return #sig;
+    _HANDLE_SIG (SIGHUP);
+    _HANDLE_SIG (SIGINT);
+    _HANDLE_SIG (SIGQUIT);
+    _HANDLE_SIG (SIGILL);
+    _HANDLE_SIG (SIGABRT);
+    _HANDLE_SIG (SIGFPE);
+    _HANDLE_SIG (SIGKILL);
+    _HANDLE_SIG (SIGSEGV);
+    _HANDLE_SIG (SIGPIPE);
+    _HANDLE_SIG (SIGALRM);
+    _HANDLE_SIG (SIGTERM);
+    _HANDLE_SIG (SIGUSR1);
+    _HANDLE_SIG (SIGUSR2);
+    _HANDLE_SIG (SIGCHLD);
+    _HANDLE_SIG (SIGCONT);
+    _HANDLE_SIG (SIGSTOP);
+    _HANDLE_SIG (SIGTSTP);
+    _HANDLE_SIG (SIGTTIN);
+    _HANDLE_SIG (SIGTTOU);
+    _HANDLE_SIG (SIGBUS);
+    _HANDLE_SIG (SIGPOLL);
+    _HANDLE_SIG (SIGPROF);
+    _HANDLE_SIG (SIGSYS);
+    _HANDLE_SIG (SIGTRAP);
+    _HANDLE_SIG (SIGURG);
+    _HANDLE_SIG (SIGVTALRM);
+    _HANDLE_SIG (SIGXCPU);
+    _HANDLE_SIG (SIGXFSZ);
+#undef _HANDLE_SIG
+    default:
+      break;
+    }
+  return "UNKNOWN_SIGNAL";
+}
+
+gboolean
+ul_util_check_status_and_output (const gchar *cmd,
+                                 gint status,
+                                 const gchar *standard_out,
+                                 const gchar *standard_error,
+                                 GError **error)
+{
+  GString *message;
+
+  if (WIFEXITED (status) && WEXITSTATUS (status) == 0)
+    return TRUE;
+
+  message = g_string_new (NULL);
+  if (WIFEXITED (status))
+    {
+          g_string_append_printf (message,
+                                  "%s exited with non-zero exit status %d",
+                                  cmd, WEXITSTATUS (status));
+    }
+  else if (WIFSIGNALED (status))
+    {
+      g_string_append_printf (message,
+                              "%s was signaled with signal %s (%d)",
+                              cmd, get_signal_name (WTERMSIG (status)),
+                              WTERMSIG (status));
+    }
+  if (standard_out && standard_out[0] &&
+      standard_error && standard_error[0])
+    {
+      g_string_append_printf (message,
+                              "\n"
+                              "stdout: '%s'\n"
+                              "stderr: '%s'",
+                              standard_out,
+                              standard_error);
+    }
+  else if (standard_out && standard_out[0])
+    {
+      g_string_append_printf (message, ": %s", standard_out);
+    }
+  else if (standard_error && standard_error[0])
+    {
+      g_string_append_printf (message, ": %s", standard_error);
+    }
+
+  g_set_error_literal (error, UDISKS_ERROR, UDISKS_ERROR_FAILED, message->str);
+  g_string_free (message, TRUE);
+  return FALSE;
 }

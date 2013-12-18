@@ -24,8 +24,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "basejob.h"
 #include "daemon.h"
+#include "job.h"
 
 #define MAX_SAMPLES 100
 
@@ -37,13 +37,13 @@ typedef struct
 
 /**
  * SECTION:udisksbasejob
- * @title: UlBaseJob
+ * @title: UlJob
  * @short_description: Base class for jobs.
  *
  * This type provides common features needed by all job types.
  */
 
-struct _UlBaseJobPrivate
+struct _UlJobPrivate
 {
   GCancellable *cancellable;
   UlDaemon *daemon;
@@ -65,14 +65,14 @@ enum
   PROP_AUTO_ESTIMATE,
 };
 
-G_DEFINE_ABSTRACT_TYPE_WITH_CODE (UlBaseJob, ul_base_job, UDISKS_TYPE_JOB_SKELETON,
+G_DEFINE_ABSTRACT_TYPE_WITH_CODE (UlJob, ul_job, UDISKS_TYPE_JOB_SKELETON,
                                   G_IMPLEMENT_INTERFACE (UDISKS_TYPE_JOB, job_iface_init)
 );
 
 static void
-ul_base_job_finalize (GObject *object)
+ul_job_finalize (GObject *object)
 {
-  UlBaseJob *self = UL_BASE_JOB (object);
+  UlJob *self = UL_JOB (object);
 
   g_free (self->priv->samples);
 
@@ -82,17 +82,16 @@ ul_base_job_finalize (GObject *object)
       self->priv->cancellable = NULL;
     }
 
-  if (G_OBJECT_CLASS (ul_base_job_parent_class)->finalize != NULL)
-    G_OBJECT_CLASS (ul_base_job_parent_class)->finalize (object);
+  G_OBJECT_CLASS (ul_job_parent_class)->finalize (object);
 }
 
 static void
-ul_base_job_get_property (GObject *object,
-                          guint prop_id,
-                          GValue *value,
-                          GParamSpec *pspec)
+ul_job_get_property (GObject *object,
+                     guint prop_id,
+                     GValue *value,
+                     GParamSpec *pspec)
 {
-  UlBaseJob *self = UL_BASE_JOB (object);
+  UlJob *self = UL_JOB (object);
 
   switch (prop_id)
     {
@@ -115,12 +114,12 @@ ul_base_job_get_property (GObject *object,
 }
 
 static void
-ul_base_job_set_property (GObject *object,
-                          guint prop_id,
-                          const GValue *value,
-                          GParamSpec *pspec)
+ul_job_set_property (GObject *object,
+                     guint prop_id,
+                     const GValue *value,
+                     GParamSpec *pspec)
 {
-  UlBaseJob *self = UL_BASE_JOB (object);
+  UlJob *self = UL_JOB (object);
 
   switch (prop_id)
     {
@@ -136,7 +135,7 @@ ul_base_job_set_property (GObject *object,
       break;
 
     case PROP_AUTO_ESTIMATE:
-      ul_base_job_set_auto_estimate (self, g_value_get_boolean (value));
+      ul_job_set_auto_estimate (self, g_value_get_boolean (value));
       break;
 
     default:
@@ -148,43 +147,43 @@ ul_base_job_set_property (GObject *object,
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
-ul_base_job_constructed (GObject *object)
+ul_job_constructed (GObject *object)
 {
-  UlBaseJob *self = UL_BASE_JOB (object);
+  UlJob *self = UL_JOB (object);
 
   if (self->priv->cancellable == NULL)
     self->priv->cancellable = g_cancellable_new ();
 
-  if (G_OBJECT_CLASS (ul_base_job_parent_class)->constructed != NULL)
-    G_OBJECT_CLASS (ul_base_job_parent_class)->constructed (object);
+  if (G_OBJECT_CLASS (ul_job_parent_class)->constructed != NULL)
+    G_OBJECT_CLASS (ul_job_parent_class)->constructed (object);
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
-ul_base_job_init (UlBaseJob *self)
+ul_job_init (UlJob *self)
 {
   gint64 now_usec;
 
-  self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self, UL_TYPE_BASE_JOB, UlBaseJobPrivate);
+  self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self, UL_TYPE_JOB, UlJobPrivate);
 
   now_usec = g_get_real_time ();
   udisks_job_set_start_time (UDISKS_JOB (self), now_usec);
 }
 
 static void
-ul_base_job_class_init (UlBaseJobClass *klass)
+ul_job_class_init (UlJobClass *klass)
 {
   GObjectClass *gobject_class;
 
   gobject_class = G_OBJECT_CLASS (klass);
-  gobject_class->finalize     = ul_base_job_finalize;
-  gobject_class->constructed  = ul_base_job_constructed;
-  gobject_class->set_property = ul_base_job_set_property;
-  gobject_class->get_property = ul_base_job_get_property;
+  gobject_class->finalize     = ul_job_finalize;
+  gobject_class->constructed  = ul_job_constructed;
+  gobject_class->set_property = ul_job_set_property;
+  gobject_class->get_property = ul_job_get_property;
 
   /**
-   * UlBaseJob:daemon:
+   * UlJob:daemon:
    *
    * The #UlDaemon the object is for.
    */
@@ -200,7 +199,7 @@ ul_base_job_class_init (UlBaseJobClass *klass)
                                                         G_PARAM_STATIC_STRINGS));
 
   /**
-   * UlBaseJob:cancellable:
+   * UlJob:cancellable:
    *
    * The #GCancellable to use.
    */
@@ -216,7 +215,7 @@ ul_base_job_class_init (UlBaseJobClass *klass)
                                                         G_PARAM_STATIC_STRINGS));
 
   /**
-   * UlBaseJob:auto-estimate:
+   * UlJob:auto-estimate:
    *
    * If %TRUE, the #UlJob:expected-end-time property will be
    * automatically updated every time the #UlJob:progress property
@@ -232,31 +231,31 @@ ul_base_job_class_init (UlBaseJobClass *klass)
                                                          G_PARAM_WRITABLE |
                                                          G_PARAM_STATIC_STRINGS));
 
-  g_type_class_add_private (klass, sizeof (UlBaseJobPrivate));
+  g_type_class_add_private (klass, sizeof (UlJobPrivate));
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
 
 /**
- * ul_base_job_get_cancellable:
- * @self: A #UlBaseJob.
+ * ul_job_get_cancellable:
+ * @self: A #UlJob.
  *
  * Gets the #GCancellable for job.
  *
  * Returns: A #GCancellable. Do not free, the object belongs to job.
  */
 GCancellable *
-ul_base_job_get_cancellable (UlBaseJob *self)
+ul_job_get_cancellable (UlJob *self)
 {
-  g_return_val_if_fail (UL_IS_BASE_JOB (self), NULL);
+  g_return_val_if_fail (UL_IS_JOB (self), NULL);
   return self->priv->cancellable;
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
 
 /**
- * ul_base_job_add_object:
- * @self: A #UlBaseJob.
+ * ul_job_add_object:
+ * @self: A #UlJob.
  * @object: A #UlObject.
  *
  * Adds the object path for @object to the <link
@@ -264,18 +263,30 @@ ul_base_job_get_cancellable (UlBaseJob *self)
  * array. If the object path is already in the array, does nothing.
  */
 void
-ul_base_job_add_object (UlBaseJob *self,
-                        LvmObject *object)
+ul_job_add_thing (UlJob *self,
+                  gpointer object_or_interface)
 {
   const gchar *object_path;
   const gchar *const *paths;
   const gchar **p;
   guint n;
 
-  g_return_if_fail (UL_IS_BASE_JOB (self));
-  g_return_if_fail (LVM_IS_OBJECT (object));
+  g_return_if_fail (UL_IS_JOB (self));
 
-  object_path = g_dbus_object_get_object_path (G_DBUS_OBJECT (object));
+  if (object_or_interface != NULL)
+  {
+    if (G_IS_DBUS_OBJECT (object_or_interface))
+      object_path = g_dbus_object_get_object_path (object_or_interface);
+    else if (G_IS_DBUS_INTERFACE_SKELETON (object_or_interface))
+      object_path = g_dbus_interface_skeleton_get_object_path (object_or_interface);
+    else
+      {
+        g_critical ("Invalid interface or object passed to job: %s",
+                    G_OBJECT_TYPE_NAME (object_or_interface));
+        return;
+      }
+  }
+
   paths = udisks_job_get_objects (UDISKS_JOB (self));
   for (n = 0; paths != NULL && paths[n] != NULL; n++)
     {
@@ -292,51 +303,6 @@ ul_base_job_add_object (UlBaseJob *self,
   ;
 }
 
-/**
- * ul_base_job_remove_object:
- * @self: A #UlBaseJob.
- * @object: A #UlObject.
- *
- * Removes the object path for @object to the <link
- * linkend="gdbus-property-org-freedesktop-UDisks2-Job.Objects">Objects</link>
- * array. If the object path is not in the array, does nothing.
- */
-void
-ul_base_job_remove_object (UlBaseJob *self,
-                           LvmObject *object)
-{
-  const gchar *object_path;
-  const gchar *const *paths;
-  GPtrArray *p = NULL;
-  guint n;
-
-  g_return_if_fail (UL_IS_BASE_JOB (self));
-  g_return_if_fail (LVM_IS_OBJECT (object));
-
-  object_path = g_dbus_object_get_object_path (G_DBUS_OBJECT (object));
-  paths = udisks_job_get_objects (UDISKS_JOB (self));
-  for (n = 0; paths != NULL && paths[n] != NULL; n++)
-    {
-      if (g_strcmp0 (paths[n], object_path) != 0)
-        {
-          if (p == NULL)
-            p = g_ptr_array_new ();
-          g_ptr_array_add (p, (gpointer) paths[n]);
-        }
-    }
-
-  if (p != NULL)
-    {
-      g_ptr_array_add (p, NULL);
-      udisks_job_set_objects (UDISKS_JOB (self), (const gchar *const *) p->pdata);
-      g_ptr_array_free (p, TRUE);
-    }
-  else
-    {
-      udisks_job_set_objects (UDISKS_JOB (self), NULL);
-    }
-}
-
 /* ---------------------------------------------------------------------------------------------------- */
 
 static gboolean
@@ -344,24 +310,7 @@ handle_cancel (UDisksJob *job,
                GDBusMethodInvocation *invocation,
                GVariant *options)
 {
-  UlBaseJob *self = UL_BASE_JOB (job);
-  const gchar *action_id;
-  const gchar *message;
-  uid_t caller_uid;
-  gid_t caller_gid;
-  GError *error = NULL;
-
-  if (!ul_daemon_get_caller_uid_sync (self->priv->daemon,
-                                      invocation,
-                                      NULL /* GCancellable */,
-                                      &caller_uid,
-                                      &caller_gid,
-                                      NULL,
-                                      &error))
-    {
-      g_dbus_method_invocation_take_error (invocation, error);
-      goto out;
-    }
+  UlJob *self = UL_JOB (job);
 
   if (!udisks_job_get_cancelable (job))
     {
@@ -371,21 +320,6 @@ handle_cancel (UDisksJob *job,
                                              "The job cannot be canceled");
       goto out;
     }
-
-  /* Translators: Shown in authentication dialog when canceling a job.
-   */
-  message = N_("Authentication is required to cancel a job");
-  action_id = "org.freedesktop.udisks2.cancel-job";
-  if (caller_uid != udisks_job_get_started_by_uid (job))
-    action_id = "org.freedesktop.udisks2.cancel-job-other-user";
-
-  if (!ul_daemon_check_authorization_sync (self->priv->daemon,
-                                           NULL,
-                                           action_id,
-                                           options,
-                                           message,
-                                           invocation))
-    goto out;
 
   if (g_cancellable_is_cancelled (self->priv->cancellable))
     {
@@ -415,17 +349,17 @@ job_iface_init (UDisksJobIface *iface)
 /* ---------------------------------------------------------------------------------------------------- */
 
 /**
- * ul_base_job_get_auto_estimate:
- * @self: A #UlBaseJob.
+ * ul_job_get_auto_estimate:
+ * @self: A #UlJob.
  *
  * Gets whether auto-estimation is being used.
  *
  * Returns: %TRUE if auto-estimation is being used, %FALSE otherwise.
  */
 gboolean
-ul_base_job_get_auto_estimate (UlBaseJob *self)
+ul_job_get_auto_estimate (UlJob *self)
 {
-  g_return_val_if_fail (UL_IS_BASE_JOB (self), FALSE);
+  g_return_val_if_fail (UL_IS_JOB (self), FALSE);
   return self->priv->auto_estimate;
 }
 
@@ -435,7 +369,7 @@ on_notify_progress (GObject     *object,
                     GParamSpec  *spec,
                     gpointer     user_data)
 {
-  UlBaseJob *self = UL_BASE_JOB (user_data);
+  UlJob *self = UL_JOB (user_data);
   Sample *sample;
   guint n;
   gdouble sum_of_speeds;
@@ -496,17 +430,17 @@ on_notify_progress (GObject     *object,
 }
 
 /**
- * ul_base_job_set_auto_estimate:
- * @self: A #UlBaseJob.
+ * ul_job_set_auto_estimate:
+ * @self: A #UlJob.
  * @value: %TRUE if auto-estimation is to be use, %FALSE otherwise.
  *
  * Sets whether auto-estimation is being used.
  */
 void
-ul_base_job_set_auto_estimate (UlBaseJob *self,
-                               gboolean value)
+ul_job_set_auto_estimate (UlJob *self,
+                          gboolean value)
 {
-  g_return_if_fail (UL_IS_BASE_JOB (self));
+  g_return_if_fail (UL_IS_JOB (self));
 
   if (!!value == !!self->priv->auto_estimate)
     goto out;

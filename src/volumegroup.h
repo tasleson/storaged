@@ -30,14 +30,22 @@ G_BEGIN_DECLS
 #define UL_IS_VOLUME_GROUP(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_VOLUME_GROUP))
 
 typedef struct _UlVolumeGroup UlVolumeGroup;
+typedef struct _UlLogicalVolume UlLogicalVolume;
 
-GType              ul_volume_group_get_type  (void) G_GNUC_CONST;
+GType              ul_volume_group_get_type            (void) G_GNUC_CONST;
 
-LvmVolumeGroup *   ul_volume_group_new       (void);
+UlVolumeGroup *    ul_volume_group_new                 (const gchar *name);
 
-void               ul_volume_group_update    (UlVolumeGroup *volume_group,
-                                              GVariant *info,
-                                              gboolean *needs_polling_ret);
+const gchar *      ul_volume_group_get_name            (UlVolumeGroup *self);
+
+const gchar *      ul_volume_group_get_object_path     (UlVolumeGroup *self);
+
+void               ul_volume_group_update              (UlVolumeGroup *self);
+
+void               ul_volume_group_poll                (UlVolumeGroup *self);
+
+UlLogicalVolume *  ul_volume_group_find_logical_volume (UlVolumeGroup *self,
+                                                        const gchar *name);
 
 G_END_DECLS
 

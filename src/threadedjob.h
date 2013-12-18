@@ -18,32 +18,29 @@
  *
  */
 
-#ifndef __UL_SPAWNED_JOB_H__
-#define __UL_SPAWNED_JOB_H__
+#ifndef __UL_THREADED_JOB_H__
+#define __UL_THREADED_JOB_H__
 
-#include <gio/gio.h>
-
-#include "daemon.h"
+#include "job.h"
 
 G_BEGIN_DECLS
 
-#define UL_TYPE_SPAWNED_JOB         (ul_spawned_job_get_type ())
-#define UL_SPAWNED_JOB(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_SPAWNED_JOB, UlSpawnedJob))
-#define UL_IS_SPAWNED_JOB(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_SPAWNED_JOB))
+#define UL_TYPE_THREADED_JOB         (ul_threaded_job_get_type ())
+#define UL_THREADED_JOB(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_THREADED_JOB, UlThreadedJob))
+#define UL_IS_THREADED_JOB(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_THREADED_JOB))
 
-typedef struct _UlSpawnedJob UlSpawnedJob;
+typedef struct _UlThreadedJob UlThreadedJob;
 
-GType              ul_spawned_job_get_type         (void) G_GNUC_CONST;
+GType             ul_threaded_job_get_type         (void) G_GNUC_CONST;
 
-UlSpawnedJob  *    ul_spawned_job_new              (const gchar **argv,
-                                                    const gchar *input_string,
-                                                    uid_t run_as_uid,
-                                                    uid_t run_as_euid,
+UlThreadedJob *   ul_threaded_job_new              (UlJobFunc job_func,
+                                                    gpointer user_data,
+                                                    GDestroyNotify user_data_free_func,
                                                     UlDaemon *daemon,
                                                     GCancellable *cancellable);
 
-const gchar **     ul_spawned_job_get_argv         (UlSpawnedJob *job);
+gpointer          ul_threaded_job_get_user_data    (UlThreadedJob *job);
 
 G_END_DECLS
 
-#endif /* __UL_SPAWNED_JOB_H__ */
+#endif /* __UL_THREADED_JOB_H__ */

@@ -22,7 +22,7 @@
 #define __UL_MANAGER_H__
 
 #include "daemon.h"
-#include "volumegroupobject.h"
+#include "volumegroup.h"
 
 G_BEGIN_DECLS
 
@@ -34,9 +34,7 @@ GType                  ul_manager_get_type                 (void) G_GNUC_CONST;
 
 UlManager *            ul_manager_new                      (void);
 
-void                   ul_manager_start                    (UlManager *self);
-
-UlVolumeGroupObject *  ul_manager_find_volume_group_object (UlManager *self,
+UlVolumeGroup *        ul_manager_find_volume_group        (UlManager *self,
                                                             const gchar *name);
 
 G_END_DECLS

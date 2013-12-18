@@ -272,11 +272,13 @@ test_vgcreate_remove (Test *test,
   g_assert_cmpstr (string_property (volume_group, "Name"), ==, "test-udisk-lvm");
 
   /* At this point these two guys should each be a PhysicalVolumeBlock */
-  block = lookup_interface (test, test->blocks[0].object_path, "com.redhat.lvm2.PhysicalVolumeBlock");
+  while ((block = lookup_interface (test, test->blocks[0].object_path, "com.redhat.lvm2.PhysicalVolumeBlock")) == NULL)
+    g_main_context_iteration (NULL, TRUE);
   g_assert_cmpstr (string_property (block, "VolumeGroup"), ==, g_dbus_proxy_get_object_path (volume_group));
   g_object_unref (block);
 
-  block = lookup_interface (test, test->blocks[1].object_path, "com.redhat.lvm2.PhysicalVolumeBlock");
+  while ((block = lookup_interface (test, test->blocks[1].object_path, "com.redhat.lvm2.PhysicalVolumeBlock")) == NULL)
+    g_main_context_iteration (NULL, TRUE);
   g_assert_cmpstr (string_property (block, "VolumeGroup"), ==, g_dbus_proxy_get_object_path (volume_group));
   g_object_unref (block);
 

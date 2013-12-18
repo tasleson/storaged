@@ -20,12 +20,13 @@
 
 #include "config.h"
 
-#include "basejob.h"
-#include "blockobject.h"
+#include "block.h"
 #include "daemon.h"
+#include "job.h"
 #include "manager.h"
 #include "spawnedjob.h"
-#include "volumegroupobject.h"
+#include "threadedjob.h"
+#include "volumegroup.h"
 
 #include <glib/gi18n-lib.h>
 
@@ -41,6 +42,13 @@
  *
  * Object holding all global state.
  */
+
+enum {
+  PUBLISHED,
+  NUM_SIGNALS
+};
+
+static guint signals[NUM_SIGNALS] = { 0, };
 
 /* The only daemon that should be created is tracked here */
 static UlDaemon *default_daemon = NULL;
@@ -109,7 +117,7 @@ ul_daemon_get_property (GObject    *object,
   switch (prop_id)
     {
     case PROP_OBJECT_MANAGER:
-      g_value_set_object (value, ul_daemon_get_object_manager (self));
+      g_value_set_object (value, self->object_manager);
       break;
 
     default:
@@ -232,6 +240,13 @@ ul_daemon_class_init (UlDaemonClass *klass)
                                                         G_PARAM_WRITABLE |
                                                         G_PARAM_CONSTRUCT_ONLY |
                                                         G_PARAM_STATIC_STRINGS));
+
+  signals[PUBLISHED] = g_signal_new ("published",
+                                     UL_TYPE_DAEMON,
+                                     G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
+                                     0, NULL, NULL,
+                                     g_cclosure_marshal_generic,
+                                     G_TYPE_NONE, 1, G_TYPE_DBUS_OBJECT);
 }
 
 UlDaemon *
@@ -239,13 +254,6 @@ ul_daemon_get (void)
 {
   g_assert (default_daemon != NULL);
   return default_daemon;
-}
-
-GDBusObjectManagerServer *
-ul_daemon_get_object_manager (UlDaemon *self)
-{
-  g_return_val_if_fail (UL_IS_DAEMON (self), NULL);
-  return self->object_manager;
 }
 
 UlManager *
@@ -287,7 +295,6 @@ on_job_completed (UDisksJob *job,
   /* Unexport job */
   g_dbus_object_manager_server_unexport (self->object_manager,
                                          g_dbus_object_get_object_path (object));
-  g_object_unref (object);
 
   /* free the allocated job object */
   g_object_unref (job);
@@ -331,36 +338,69 @@ static guint job_id = 0;
  * Returns: A #UDisksSpawnedJob object. Do not free, the object
  * belongs to @manager.
  */
-UlBaseJob *
+UlJob *
 ul_daemon_launch_spawned_job (UlDaemon *self,
-                              LvmObject *object,
+                              gpointer object_or_interface,
                               const gchar *job_operation,
                               uid_t job_started_by_uid,
                               GCancellable *cancellable,
                               uid_t run_as_uid,
                               uid_t run_as_euid,
                               const gchar *input_string,
-                              const gchar *command_line_format,
+                              const gchar *first_arg,
                               ...)
 {
+  GPtrArray *args;
+  UlJob *job;
   va_list var_args;
-  gchar *command_line;
+
+  g_return_val_if_fail (UL_IS_DAEMON (self), NULL);
+  g_return_val_if_fail (cancellable == NULL || G_IS_CANCELLABLE (cancellable), NULL);
+  g_return_val_if_fail (first_arg != NULL, NULL);
+
+  args = g_ptr_array_new ();
+  va_start (var_args, first_arg);
+  while (first_arg != NULL)
+    {
+      g_ptr_array_add (args, g_strdup (first_arg));
+      first_arg = va_arg (var_args, gchar *);
+    }
+  va_end (var_args);
+  g_ptr_array_add (args, NULL);
+
+  job = ul_daemon_launch_spawned_jobv (self, object_or_interface, job_operation,
+                                       job_started_by_uid, cancellable, run_as_uid,
+                                       run_as_euid, input_string,
+                                       (const gchar **)args->pdata);
+
+  g_ptr_array_free (args, TRUE);
+
+  return job;
+}
+
+UlJob *
+ul_daemon_launch_spawned_jobv (UlDaemon *self,
+                               gpointer object_or_interface,
+                               const gchar *job_operation,
+                               uid_t job_started_by_uid,
+                               GCancellable *cancellable,
+                               uid_t run_as_uid,
+                               uid_t run_as_euid,
+                               const gchar *input_string,
+                               const gchar **argv)
+{
   UlSpawnedJob *job;
   GDBusObjectSkeleton *job_object;
   gchar *job_object_path;
 
   g_return_val_if_fail (UL_IS_DAEMON (self), NULL);
   g_return_val_if_fail (cancellable == NULL || G_IS_CANCELLABLE (cancellable), NULL);
-  g_return_val_if_fail (command_line_format != NULL, NULL);
 
-  va_start (var_args, command_line_format);
-  command_line = g_strdup_vprintf (command_line_format, var_args);
-  va_end (var_args);
-  job = ul_spawned_job_new (command_line, input_string, run_as_uid, run_as_euid, self, cancellable);
-  g_free (command_line);
+  job = ul_spawned_job_new (argv, input_string,
+                            run_as_uid, run_as_euid, self, cancellable);
 
-  if (object != NULL)
-    ul_base_job_add_object (UL_BASE_JOB (job), object);
+  if (object_or_interface != NULL)
+    ul_job_add_thing (UL_JOB (job), object_or_interface);
 
   /* TODO: protect job_id by a mutex */
   job_object_path = g_strdup_printf ("/org/freedesktop/UDisks2/jobs/%d", job_id++);
@@ -378,588 +418,143 @@ ul_daemon_launch_spawned_job (UlDaemon *self,
                           G_CALLBACK (on_job_completed),
                           g_object_ref (self));
 
-  return UL_BASE_JOB (job);
-}
-
-/* ---------------------------------------------------------------------------------------------------- */
-
-typedef struct
-{
-  GMainContext *context;
-  GMainLoop *loop;
-  gboolean success;
-  gint status;
-  gchar *message;
-} SpawnedJobSyncData;
-
-static gboolean
-spawned_job_sync_on_spawned_job_completed (UlSpawnedJob *job,
-                                           GError *error,
-                                           gint status,
-                                           GString *standard_output,
-                                           GString *standard_error,
-                                           gpointer user_data)
-{
-  SpawnedJobSyncData *data = user_data;
-  data->status = status;
-  return FALSE; /* let other handlers run */
-}
-
-static void
-spawned_job_sync_on_completed (UDisksJob *job,
-                               gboolean success,
-                               const gchar *message,
-                               gpointer user_data)
-{
-  SpawnedJobSyncData *data = user_data;
-  data->success = success;
-  data->message = g_strdup (message);
-  g_main_loop_quit (data->loop);
+  g_object_unref (job_object);
+  return UL_JOB (job);
 }
 
 /**
- * ul_daemon_launch_spawned_job_sync:
- * @self: A #UlDaemon.
- * @object: (allow-none): A #LvmObject to add to the job or %NULL.
+ * udisks_daemon_launch_threaded_job:
+ * @daemon: A #UDisksDaemon.
+ * @object: (allow-none): A #UDisksObject to add to the job or %NULL.
  * @job_operation: The operation for the job.
  * @job_started_by_uid: The user who started the job.
+ * @job_func: The function to run in another thread.
+ * @user_data: User data to pass to @job_func.
+ * @user_data_free_func: Function to free @user_data with or %NULL.
  * @cancellable: A #GCancellable or %NULL.
- * @run_as_uid: The #uid_t to run the command as.
- * @run_as_euid: The effective #uid_t to run the command as.
- * @input_string: A string to write to stdin of the spawned program or %NULL.
- * @out_status: Return location for the @status parameter of the #UDisksSpawnedJob::spawned-job-completed signal.
- * @out_message: Return location for the @message parameter of the #UDisksJob::completed signal.
- * @command_line_format: printf()-style format for the command line to spawn.
- * @...: Arguments for @command_line_format.
  *
- * Like ul_daemon_launch_spawned_job() but blocks the calling
- * thread until the job completes.
+ * Launches a new job by running @job_func in a new dedicated thread.
  *
- * Returns: The @success parameter of the #UDisksJob::completed signal.
+ * The job is started immediately - connect to the
+ * #UDisksThreadedJob::threaded-job-completed or #UDisksJob::completed
+ * signals to get notified when the job is done.
+ *
+ * Long-running jobs should periodically check @cancellable to see if
+ * they have been cancelled.
+ *
+ * The returned object will be exported on the bus until the
+ * #UDisksJob::completed signal is emitted on the object. It is not
+ * valid to use the returned object after this signal fires.
+ *
+ * Returns: A #UDisksThreadedJob object. Do not free, the object
+ * belongs to @manager.
  */
-gboolean
-ul_daemon_launch_spawned_job_sync (UlDaemon *self,
-                                   LvmObject *object,
-                                   const gchar *job_operation,
-                                   uid_t job_started_by_uid,
-                                   GCancellable *cancellable,
-                                   uid_t run_as_uid,
-                                   uid_t run_as_euid,
-                                   gint *out_status,
-                                   gchar **out_message,
-                                   const gchar *input_string,
-                                   const gchar *command_line_format,
-                                   ...)
-{
-  va_list var_args;
-  gchar *command_line;
-  UlBaseJob *job;
-  SpawnedJobSyncData data;
-
-  g_return_val_if_fail (UL_IS_DAEMON (self), FALSE);
-  g_return_val_if_fail (cancellable == NULL || G_IS_CANCELLABLE (cancellable), FALSE);
-  g_return_val_if_fail (command_line_format != NULL, FALSE);
-
-  data.context = g_main_context_new ();
-  g_main_context_push_thread_default (data.context);
-  data.loop = g_main_loop_new (data.context, FALSE);
-  data.success = FALSE;
-  data.status = 0;
-  data.message = NULL;
-
-  va_start (var_args, command_line_format);
-  command_line = g_strdup_vprintf (command_line_format, var_args);
-  va_end (var_args);
-  job = ul_daemon_launch_spawned_job (self,
-                                      object,
-                                      job_operation,
-                                      job_started_by_uid,
-                                      cancellable,
-                                      run_as_uid,
-                                      run_as_euid,
-                                      input_string,
-                                      "%s",
-                                      command_line);
-  g_signal_connect (job,
-                    "spawned-job-completed",
-                    G_CALLBACK (spawned_job_sync_on_spawned_job_completed),
-                    &data);
-  g_signal_connect_after (job,
-                          "completed",
-                          G_CALLBACK (spawned_job_sync_on_completed),
-                          &data);
-
-  g_main_loop_run (data.loop);
-
-  if (out_status != NULL)
-    *out_status = data.status;
-
-  if (out_message != NULL)
-    *out_message = data.message;
-  else
-    g_free (data.message);
-
-  g_free (command_line);
-  g_main_loop_unref (data.loop);
-  g_main_context_pop_thread_default (data.context);
-  g_main_context_unref (data.context);
-
-  /* note: the job object is freed in the ::completed handler */
-
-  return data.success;
-}
-
-/* ---------------------------------------------------------------------------------------------------- */
-
-/**
- * ul_daemon_wait_for_object_sync:
- * @self: A #UlDaemon.
- * @wait_func: Function to check for desired object.
- * @user_data: User data to pass to @wait_func.
- * @user_data_free_func: (allow-none): Function to free @user_data or %NULL.
- * @timeout_seconds: Maximum time to wait for the object (in seconds) or 0 to never wait.
- * @error: (allow-none): Return location for error or %NULL.
- *
- * Blocks the calling thread until an object picked by @wait_func is
- * available or until @timeout_seconds has passed (in which case the
- * function fails with %UDISKS_ERROR_TIMED_OUT).
- *
- * Note that @wait_func will be called from time to time - for example
- * if there is a device event.
- *
- * Returns: (transfer full): The object picked by @wait_func or %NULL if @error is set.
- */
-
-typedef struct {
-  GMainContext *context;
-  GMainLoop *loop;
-  gboolean timed_out;
-} WaitData;
-
-static gboolean
-wait_on_timed_out (gpointer user_data)
-{
-  WaitData *data = user_data;
-  data->timed_out = TRUE;
-  g_main_loop_quit (data->loop);
-  return FALSE; /* remove the source */
-}
-
-static gboolean
-wait_on_recheck (gpointer user_data)
-{
-  WaitData *data = user_data;
-  g_main_loop_quit (data->loop);
-  return FALSE; /* remove the source */
-}
-
-GDBusObject *
-ul_daemon_wait_for_object_sync (UlDaemon *self,
-                                UlDaemonWaitFunc wait_func,
+UlJob *
+ul_daemon_launch_threaded_job  (UlDaemon *daemon,
+                                gpointer object_or_interface,
+                                const gchar *job_operation,
+                                uid_t job_started_by_uid,
+                                UlJobFunc job_func,
                                 gpointer user_data,
                                 GDestroyNotify user_data_free_func,
-                                guint timeout_seconds,
-                                GError **error)
+                                GCancellable *cancellable)
 {
-  GDBusObject *ret;
-  WaitData data;
+  UlThreadedJob *job;
+  GDBusObjectSkeleton *job_object;
+  gchar *job_object_path;
 
-  /* TODO: support GCancellable */
+  g_return_val_if_fail (UL_IS_DAEMON (daemon), NULL);
+  g_return_val_if_fail (job_func != NULL, NULL);
 
-  g_return_val_if_fail (UL_IS_DAEMON (self), NULL);
-  g_return_val_if_fail (wait_func != NULL, NULL);
+  job = ul_threaded_job_new (job_func,
+                             user_data,
+                             user_data_free_func,
+                             daemon,
+                             cancellable);
+  if (object_or_interface != NULL)
+    ul_job_add_thing (UL_JOB (job), object_or_interface);
 
-  ret = NULL;
+  /* TODO: protect job_id by a mutex */
+  job_object_path = g_strdup_printf ("/org/freedesktop/UDisks2/jobs/%d", job_id++);
+  job_object = g_dbus_object_skeleton_new (job_object_path);
+  g_dbus_object_skeleton_add_interface (job_object, G_DBUS_INTERFACE_SKELETON (job));
+  g_free (job_object_path);
 
-  memset (&data, '\0', sizeof (data));
-  data.context = NULL;
-  data.loop = NULL;
+  udisks_job_set_cancelable (UDISKS_JOB (job), TRUE);
+  udisks_job_set_operation (UDISKS_JOB (job), job_operation);
+  udisks_job_set_started_by_uid (UDISKS_JOB (job), job_started_by_uid);
 
-  g_object_ref (self);
+  g_dbus_object_manager_server_export (daemon->object_manager, G_DBUS_OBJECT_SKELETON (job_object));
+  g_signal_connect_after (job,
+                          "completed",
+                          G_CALLBACK (on_job_completed),
+                          g_object_ref (daemon));
 
- again:
-  ret = wait_func (self, user_data);
-
-  if (ret == NULL && timeout_seconds > 0)
-    {
-      GSource *source;
-
-      /* sit and wait for up to @timeout_seconds if the object isn't there already */
-      if (data.context == NULL)
-        {
-          /* TODO: this will deadlock if we are calling from the main thread... */
-          data.context = g_main_context_new ();
-          data.loop = g_main_loop_new (data.context, FALSE);
-
-          source = g_timeout_source_new_seconds (timeout_seconds);
-          g_source_set_priority (source, G_PRIORITY_DEFAULT);
-          g_source_set_callback (source, wait_on_timed_out, &data, NULL);
-          g_source_attach (source, data.context);
-          g_source_unref (source);
-        }
-
-      /* TODO: do something a bit more elegant than checking every 250ms ... it's
-       *       probably going to involve having each UDisksProvider emit a "changed"
-       *       signal when it's time to recheck... for now this works.
-       */
-      source = g_timeout_source_new (250);
-      g_source_set_priority (source, G_PRIORITY_DEFAULT);
-      g_source_set_callback (source, wait_on_recheck, &data, NULL);
-      g_source_attach (source, data.context);
-      g_source_unref (source);
-
-      g_main_loop_run (data.loop);
-
-      if (data.timed_out)
-        {
-          g_set_error (error,
-                       UDISKS_ERROR, UDISKS_ERROR_FAILED,
-                       "Timed out waiting for object");
-        }
-      else
-        {
-          goto again;
-        }
-    }
-
-  if (user_data_free_func != NULL)
-    user_data_free_func (user_data);
-
-  g_object_unref (self);
-
-  if (data.loop != NULL)
-    g_main_loop_unref (data.loop);
-  if (data.context != NULL)
-    g_main_context_unref (data.context);
-
-  return ret;
+  g_object_unref (job_object);
+  return UL_JOB (job);
 }
 
-GDBusObject *
-ul_daemon_find_object (UlDaemon *daemon,
-                       const gchar *object_path)
+gpointer
+ul_daemon_find_thing (UlDaemon *daemon,
+                      const gchar *object_path,
+                      GType type_of_thing)
 {
-  return g_dbus_object_manager_get_object (G_DBUS_OBJECT_MANAGER (daemon->object_manager),
-                                           object_path);
+  GDBusObject *object;
+  GList *interfaces, *l;
+  gpointer ret = NULL;
+
+  object = g_dbus_object_manager_get_object (G_DBUS_OBJECT_MANAGER (daemon->object_manager), object_path);
+  if (object == NULL ||
+      type_of_thing == G_TYPE_INVALID ||
+      G_TYPE_CHECK_INSTANCE_TYPE (object, type_of_thing))
+    {
+      return object;
+    }
+
+  interfaces = g_dbus_object_get_interfaces (object);
+  for (l = interfaces; ret == NULL && l != NULL; l = g_list_next (l))
+    {
+      if (G_TYPE_CHECK_INSTANCE_TYPE (l->data, type_of_thing))
+        ret = g_object_ref (l->data);
+    }
+
+  g_list_free_full (interfaces, g_object_unref);
+  g_object_unref (object);
+  return ret;
 }
 
 GList *
-ul_daemon_get_objects (UlDaemon *daemon)
+ul_daemon_get_jobs (UlDaemon *self)
 {
-  return g_dbus_object_manager_get_objects (G_DBUS_OBJECT_MANAGER (daemon->object_manager));
+  GList *objects, *l;
+  GList *jobs = NULL;
+
+  objects = g_dbus_object_manager_get_objects (G_DBUS_OBJECT_MANAGER (self->object_manager));
+  for (l = objects; l != NULL; l = g_list_next (l))
+    {
+      if (UL_IS_JOB (l->data))
+        jobs = g_list_prepend (jobs, g_object_ref (l->data));
+    }
+  g_list_free_full (objects, g_object_unref);
+
+  return jobs;
 }
 
-
-/* Need this until we can depend on a libpolkit with this bugfix
- *
- * http://cgit.freedesktop.org/polkit/commit/?h=wip/js-rule-files&id=224f7b892478302dccbe7e567b013d3c73d376fd
- */
-static void
-_safe_polkit_details_insert (PolkitDetails *details, const gchar *key, const gchar *value)
+GList *
+ul_daemon_get_blocks (UlDaemon *self)
 {
-  if (value != NULL && strlen (value) > 0)
-    polkit_details_insert (details, key, value);
-}
+  GList *objects, *l;
+  GList *blocks = NULL;
 
-static gboolean
-check_authorization_no_polkit (UlDaemon *daemon,
-                               LvmObject *object,
-                               const gchar *action_id,
-                               GVariant *options,
-                               const gchar *message,
-                               GDBusMethodInvocation *invocation)
-{
-  gboolean ret = FALSE;
-  uid_t caller_uid = -1;
-  GError *error = NULL;
-
-  if (!ul_daemon_get_caller_uid_sync (daemon,
-                                      invocation,
-                                      NULL,         /* GCancellable* */
-                                      &caller_uid,
-                                      NULL,         /* gid_t *out_gid */
-                                      NULL,         /* gchar **out_user_name */
-                                      &error))
+  objects = g_dbus_object_manager_get_objects (G_DBUS_OBJECT_MANAGER (self->object_manager));
+  for (l = objects; l != NULL; l = g_list_next (l))
     {
-      g_dbus_method_invocation_return_error (invocation,
-                                             UDISKS_ERROR,
-                                             UDISKS_ERROR_FAILED,
-                                             "Error getting uid for caller with bus name %s: %s (%s, %d)",
-                                             g_dbus_method_invocation_get_sender (invocation),
-                                             error->message, g_quark_to_string (error->domain), error->code);
-      g_clear_error (&error);
-      goto out;
+      if (UL_IS_BLOCK (l->data))
+        blocks = g_list_prepend (blocks, g_object_ref (l->data));
     }
+  g_list_free_full (objects, g_object_unref);
 
-  /* only allow root */
-  if (caller_uid == 0)
-    {
-      ret = TRUE;
-    }
-  else
-    {
-      g_dbus_method_invocation_return_error_literal (invocation,
-                                                     UDISKS_ERROR,
-                                                     UDISKS_ERROR_NOT_AUTHORIZED,
-                                                     "Not authorized to perform operation (polkit authority not available and caller is not uid 0)");
-    }
-
- out:
-  return ret;
-}
-
-/**
- * udisks_daemon_util_check_authorization_sync:
- * @daemon: A #UDisksDaemon.
- * @object: (allow-none): The #GDBusObject that the call is on or %NULL.
- * @action_id: The action id to check for.
- * @options: (allow-none): A #GVariant to check for the <quote>auth.no_user_interaction</quote> option or %NULL.
- * @message: The message to convey (use N_).
- * @invocation: The invocation to check for.
- *
- * Checks if the caller represented by @invocation is authorized for
- * the action identified by @action_id, optionally displaying @message
- * if authentication is needed. Additionally, if the caller is not
- * authorized, the appropriate error is already returned to the caller
- * via @invocation.
- *
- * The calling thread is blocked for the duration of the authorization
- * check which could be a very long time since it may involve
- * presenting an authentication dialog and having a human user use
- * it. If <quote>auth.no_user_interaction</quote> in @options is %TRUE
- * no authentication dialog will be presented and the check is not
- * expected to take a long time.
- *
- * See <xref linkend="udisks-polkit-details"/> for the variables that
- * can be used in @message but note that not all variables can be used
- * in all checks. For example, any check involving a #xUDisksDrive or a
- * #xUDisksBlock object can safely include the fragment
- * <quote>$(drive)</quote> since it will always expand to the name of
- * the drive, e.g. <quote>INTEL SSDSA2MH080G1GC (/dev/sda1)</quote> or
- * the block device file e.g. <quote>/dev/vg_lucifer/lv_root</quote>
- * or <quote>/dev/sda1</quote>. However this won't work for operations
- * that isn't on a drive or block device, for example calls on the
- * <link linkend="gdbus-interface-org-freedesktop-UDisks2-Manager.top_of_page">Manager</link>
- * object.
- *
- * Returns: %TRUE if caller is authorized, %FALSE if not.
- */
-gboolean
-ul_daemon_check_authorization_sync (UlDaemon *daemon,
-                                    LvmObject *object,
-                                    const gchar *action_id,
-                                    GVariant *options,
-                                    const gchar *message,
-                                    GDBusMethodInvocation *invocation)
-{
-  PolkitSubject *subject = NULL;
-  PolkitDetails *details = NULL;
-  PolkitCheckAuthorizationFlags flags = POLKIT_CHECK_AUTHORIZATION_FLAGS_NONE;
-  PolkitAuthorizationResult *result = NULL;
-  GError *error = NULL;
-  gboolean ret = FALSE;
-  UDisksPartition *partition = NULL;
-  gboolean auth_no_user_interaction = FALSE;
-
-  if (daemon->authority == NULL)
-    {
-      ret = check_authorization_no_polkit (daemon, object, action_id, options, message, invocation);
-      goto out;
-    }
-
-  subject = polkit_system_bus_name_new (g_dbus_method_invocation_get_sender (invocation));
-  if (options != NULL)
-    {
-      g_variant_lookup (options,
-                        "auth.no_user_interaction",
-                        "b",
-                        &auth_no_user_interaction);
-    }
-  if (!auth_no_user_interaction)
-    flags = POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION;
-
-  details = polkit_details_new ();
-  polkit_details_insert (details, "polkit.message", message);
-  polkit_details_insert (details, "polkit.gettext_domain", "udisks2");
-
-  /* Find drive associated with the block device, if any */
-  if (UL_IS_BLOCK_OBJECT (object))
-    {
-      UlBlockObject *block = UL_BLOCK_OBJECT (object);
-      _safe_polkit_details_insert (details, "id.type",    ul_block_object_get_id_type (block));
-      _safe_polkit_details_insert (details, "id.usage",   ul_block_object_get_id_usage (block));
-      _safe_polkit_details_insert (details, "id.version", ul_block_object_get_id_version (block));
-      _safe_polkit_details_insert (details, "id.label",   ul_block_object_get_id_label (block));
-      _safe_polkit_details_insert (details, "id.uuid",    ul_block_object_get_id_uuid (block));
-    }
-
-  if (UL_IS_VOLUME_GROUP_OBJECT (object))
-    {
-      UlVolumeGroupObject *group = UL_VOLUME_GROUP_OBJECT (object);
-      _safe_polkit_details_insert (details, "lvm.volumegroup", ul_volume_group_object_get_name (group));
-    }
-
-  error = NULL;
-  result = polkit_authority_check_authorization_sync (daemon->authority,
-                                                      subject,
-                                                      action_id,
-                                                      details,
-                                                      flags,
-                                                      NULL, /* GCancellable* */
-                                                      &error);
-  if (result == NULL)
-    {
-      if (error->domain != POLKIT_ERROR)
-        {
-          /* assume polkit authority is not available (e.g. could be the service
-           * manager returning org.freedesktop.systemd1.Masked)
-           */
-          g_error_free (error);
-          ret = check_authorization_no_polkit (daemon, object, action_id, options, message, invocation);
-        }
-      else
-        {
-          g_dbus_method_invocation_return_error (invocation,
-                                                 UDISKS_ERROR,
-                                                 UDISKS_ERROR_FAILED,
-                                                 "Error checking authorization: %s (%s, %d)",
-                                                 error->message,
-                                                 g_quark_to_string (error->domain),
-                                                 error->code);
-          g_error_free (error);
-        }
-      goto out;
-    }
-  if (!polkit_authorization_result_get_is_authorized (result))
-    {
-      if (polkit_authorization_result_get_dismissed (result))
-        g_dbus_method_invocation_return_error_literal (invocation,
-                                                       UDISKS_ERROR,
-                                                       UDISKS_ERROR_NOT_AUTHORIZED_DISMISSED,
-                                                       "The authentication dialog was dismissed");
-      else
-        g_dbus_method_invocation_return_error_literal (invocation,
-                                                       UDISKS_ERROR,
-                                                       polkit_authorization_result_get_is_challenge (result) ?
-                                                       UDISKS_ERROR_NOT_AUTHORIZED_CAN_OBTAIN :
-                                                       UDISKS_ERROR_NOT_AUTHORIZED,
-                                                       "Not authorized to perform operation");
-      goto out;
-    }
-
-  ret = TRUE;
-
- out:
-  g_clear_object (&partition);
-  g_clear_object (&subject);
-  g_clear_object (&details);
-  g_clear_object (&result);
-  return ret;
-}
-
-/**
- * ul_daemon_get_caller_uid_sync:
- * @daemon: A #UDisksDaemon.
- * @invocation: A #GDBusMethodInvocation.
- * @cancellable: (allow-none): A #GCancellable or %NULL.
- * @out_uid: (out): Return location for resolved uid or %NULL.
- * @out_gid: (out) (allow-none): Return location for resolved gid or %NULL.
- * @out_user_name: (out) (allow-none): Return location for resolved user name or %NULL.
- * @error: Return location for error.
- *
- * Gets the UNIX user id (and possibly group id and user name) of the
- * peer represented by @invocation.
- *
- * Returns: %TRUE if the user id (and possibly group id) was obtained, %FALSE otherwise
- */
-gboolean
-ul_daemon_get_caller_uid_sync (UlDaemon *daemon,
-                               GDBusMethodInvocation *invocation,
-                               GCancellable *cancellable,
-                               uid_t *out_uid,
-                               gid_t *out_gid,
-                               gchar **out_user_name,
-                               GError **error)
-{
-  gboolean ret;
-  const gchar *caller;
-  GVariant *value;
-  GError *local_error;
-  uid_t uid;
-
-  /* TODO: cache this on @daemon */
-
-  ret = FALSE;
-
-  caller = g_dbus_method_invocation_get_sender (invocation);
-
-  local_error = NULL;
-  value = g_dbus_connection_call_sync (g_dbus_method_invocation_get_connection (invocation),
-                                       "org.freedesktop.DBus",  /* bus name */
-                                       "/org/freedesktop/DBus", /* object path */
-                                       "org.freedesktop.DBus",  /* interface */
-                                       "GetConnectionUnixUser", /* method */
-                                       g_variant_new ("(s)", caller),
-                                       G_VARIANT_TYPE ("(u)"),
-                                       G_DBUS_CALL_FLAGS_NONE,
-                                       -1, /* timeout_msec */
-                                       cancellable,
-                                       &local_error);
-  if (value == NULL)
-    {
-      g_set_error (error,
-                   UDISKS_ERROR,
-                   UDISKS_ERROR_FAILED,
-                   "Error determining uid of caller %s: %s (%s, %d)",
-                   caller,
-                   local_error->message,
-                   g_quark_to_string (local_error->domain),
-                   local_error->code);
-      g_error_free (local_error);
-      goto out;
-    }
-
-  {
-    G_STATIC_ASSERT (sizeof (uid_t) == sizeof (guint32));
-  }
-
-  g_variant_get (value, "(u)", &uid);
-  if (out_uid != NULL)
-    *out_uid = uid;
-
-  if (out_gid != NULL || out_user_name != NULL)
-    {
-      struct passwd pwstruct;
-      gchar pwbuf[8192];
-      static struct passwd *pw;
-      int rc;
-
-      rc = getpwuid_r (uid, &pwstruct, pwbuf, sizeof pwbuf, &pw);
-      if (rc == 0 && pw == NULL)
-        {
-          g_set_error (error,
-                       UDISKS_ERROR,
-                       UDISKS_ERROR_FAILED,
-                       "User with uid %d does not exist", (gint) uid);
-        }
-      else if (pw == NULL)
-        {
-          g_set_error (error,
-                       UDISKS_ERROR,
-                       UDISKS_ERROR_FAILED,
-                       "Error looking up passwd struct for uid %d: %m", (gint) uid);
-          goto out;
-        }
-      if (out_gid != NULL)
-        *out_gid = pw->pw_gid;
-      if (out_user_name != NULL)
-        *out_user_name = g_strdup (pwstruct.pw_name);
-    }
-
-  ret = TRUE;
-
- out:
-  return ret;
+  return blocks;
 }
 
 struct VariantReaderData {
@@ -1041,7 +636,7 @@ ul_daemon_spawn_for_variant (UlDaemon *daemon,
                              void (*callback) (GPid, GVariant *, GError *, gpointer),
                              gpointer user_data)
 {
-  GError *error;
+  GError *error = NULL;
   struct VariantReaderData *data;
   gchar *prog = NULL;
   GPid pid;
@@ -1099,3 +694,122 @@ ul_daemon_spawn_for_variant (UlDaemon *daemon,
   g_free (prog);
   return pid;
 }
+
+void
+ul_daemon_publish (UlDaemon *self,
+                   const gchar *path,
+                   gboolean uniquely,
+                   gpointer thing)
+{
+  GDBusInterface *prev;
+  GDBusInterfaceInfo *info;
+  GDBusObjectSkeleton *object;
+  GQuark detail;
+
+  g_return_if_fail (UL_IS_DAEMON (self));
+  g_return_if_fail (path != NULL);
+
+  g_debug ("%spublishing: %s", uniquely ? "uniquely " : "", path);
+
+  if (G_IS_DBUS_OBJECT (thing))
+    {
+      object = g_object_ref (thing);
+      g_dbus_object_skeleton_set_object_path (object, path);
+    }
+  else if (G_IS_DBUS_INTERFACE (thing))
+    {
+      object = G_DBUS_OBJECT_SKELETON (g_dbus_object_manager_get_object (G_DBUS_OBJECT_MANAGER (self->object_manager), path));
+      if (object != NULL)
+        {
+          if (uniquely)
+            {
+              info = g_dbus_interface_get_info (thing);
+              prev = g_dbus_object_get_interface (G_DBUS_OBJECT (object), info->name);
+              if (prev)
+                {
+                  g_object_unref (prev);
+                  g_object_unref (object);
+                  object = NULL;
+                }
+            }
+        }
+
+      if (object == NULL)
+          object = g_dbus_object_skeleton_new (path);
+
+      g_dbus_object_skeleton_add_interface (object, thing);
+    }
+  else
+    {
+      g_critical ("Unsupported object or interface type to publish: %s", G_OBJECT_TYPE_NAME (thing));
+    }
+
+  if (uniquely)
+    g_dbus_object_manager_server_export_uniquely (self->object_manager, object);
+  else
+    g_dbus_object_manager_server_export (self->object_manager, object);
+
+  detail = g_quark_from_static_string (G_OBJECT_TYPE_NAME (thing));
+  g_signal_emit (self, signals[PUBLISHED], detail, thing);
+
+  g_object_unref (object);
+}
+
+void
+ul_daemon_unpublish (UlDaemon *self,
+                     const gchar *path,
+                     gpointer thing)
+{
+  GDBusObject *object;
+  gboolean unexport = FALSE;
+  GList *interfaces, *l;
+
+  g_return_if_fail (UL_IS_DAEMON (self));
+  g_return_if_fail (path != NULL);
+
+  object = g_dbus_object_manager_get_object (G_DBUS_OBJECT_MANAGER (self->object_manager), path);
+  if (object == NULL)
+    return;
+
+  path = g_dbus_object_get_object_path (G_DBUS_OBJECT (object));
+  g_debug ("unpublishing: %s", path);
+
+  if (G_IS_DBUS_OBJECT (thing))
+    {
+      unexport = (G_DBUS_OBJECT (thing) == object);
+    }
+  else if (G_IS_DBUS_INTERFACE (thing))
+    {
+      unexport = TRUE;
+
+      interfaces = g_dbus_object_get_interfaces (object);
+      for (l = interfaces; l != NULL; l = g_list_next (l))
+        {
+          if (G_DBUS_INTERFACE (l->data) != G_DBUS_INTERFACE (thing))
+            unexport = FALSE;
+        }
+      g_list_free_full (interfaces, g_object_unref);
+
+      /*
+       * HACK: GDBusObjectManagerServer is broken ... and sends InterfaceRemoved
+       * too many times, if you remove all interfaces manually, and then unexport
+       * a GDBusObject. So only do it here if we're not unexporting the object.
+       */
+      if (!unexport)
+        g_dbus_object_skeleton_remove_interface (G_DBUS_OBJECT_SKELETON (object), thing);
+    }
+  else if (thing == NULL)
+    {
+      unexport = TRUE;
+    }
+  else
+    {
+      g_critical ("Unsupported object or interface type to unpublish: %s", G_OBJECT_TYPE_NAME (thing));
+    }
+
+  if (unexport)
+    g_dbus_object_manager_server_unexport (self->object_manager, path);
+
+  g_object_unref (object);
+}
+

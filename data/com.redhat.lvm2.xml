@@ -46,6 +46,8 @@
         physical volume.
     -->
     <method name="VolumeGroupCreate">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to delete a logical volume"/>
       <arg name="blocks" direction="in" type="ao"/>
       <arg name="name" direction="in" type="s"/>
       <arg name="extent_size" direction="in" type="t"/>
@@ -170,6 +172,8 @@
          this volume group will be wiped.
     -->
     <method name="Delete">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to delete a volume group"/>
       <arg name="options" type="a{sv}" direction="in"/>
     </method>
 
@@ -184,6 +188,8 @@
          by the rules for LVM2 names.
     -->
     <method name="Rename">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to rename a volume group"/>
       <arg name="new_display_name" type="s" direction="in"/>
       <arg name="options" type="a{sv}" direction="in"/>
       <arg name="result" type="o" direction="out"/>
@@ -196,6 +202,8 @@
          device will be wiped and all data on it will be lost.
     -->
     <method name="AddDevice">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to add a device to a volume group"/>
       <arg name="block" type="o" direction="in"/>
       <arg name="options" type="a{sv}" direction="in"/>
     </method>
@@ -210,6 +218,8 @@
          soon as the operation has started.
     -->
     <method name="EmptyDevice">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to empty a device in a volume group"/>
       <arg name="block" type="o" direction="in"/>
       <arg name="options" type="a{sv}" direction="in"/>
     </method>
@@ -224,6 +234,8 @@
          be wiped.
     -->
     <method name="RemoveDevice">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to remove a device from a volume group"/>
       <arg name="block" type="o" direction="in"/>
       <arg name="options" type="a{sv}" direction="in"/>
     </method>
@@ -238,6 +250,8 @@
          Create a 'normal' new logical volume.
     -->
     <method name="CreatePlainVolume">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to create a logical volume"/>
       <arg name="name" type="s" direction="in"/>
       <arg name="size" type="t" direction="in"/>
       <arg name="stripes" type="i" direction="in"/>
@@ -255,6 +269,8 @@
          thinly-provisioned logical volumes.
     -->
     <method name="CreateThinPoolVolume">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to create a logical volume"/>
       <arg name="name" type="s" direction="in"/>
       <arg name="size" type="t" direction="in"/>
       <arg name="options" type="a{sv}" direction="in"/>
@@ -271,6 +287,8 @@
          pool.
     -->
     <method name="CreateThinVolume">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to create a logical volume"/>
       <arg name="name" type="s" direction="in"/>
       <arg name="size" type="t" direction="in"/>
       <arg name="pool" type="o" direction="in"/>
@@ -369,6 +387,8 @@
          block device in the system.
     -->
     <method name="Activate">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to activate a logical volume"/>
       <arg name="options" type="a{sv}" direction="in"/>
       <arg name="result" type="o" direction="out"/>
     </method>
@@ -379,6 +399,8 @@
          disappear.
     -->
     <method name="Deactivate">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to deactivate a logical volume"/>
       <arg name="options" type="a{sv}" direction="in"/>
     </method>
 
@@ -393,6 +415,8 @@
          be deleted as well.
     -->
     <method name="Delete">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to delete a logical volume"/>
       <arg name="options" type="a{sv}" direction="in"/>
     </method>
 
@@ -407,6 +431,8 @@
          by the rules for LVM2 names.
     -->
     <method name="Rename">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to rename a logical volume"/>
       <arg name="new_display_name" type="s" direction="in"/>
       <arg name="options" type="a{sv}" direction="in"/>
       <arg name="result" type="o" direction="out"/>
@@ -423,6 +449,8 @@
          default value.
     -->
     <method name="Resize">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to resize a logical volume"/>
       <arg name="new_size" type="t" direction="in"/>
       <arg name="stripes" type="i" direction="in"/>
       <arg name="stripesize" type="t" direction="in"/>
@@ -446,6 +474,8 @@
          non-zero @size will create a non-thin snapshot.
     -->
     <method name="CreateSnapshot">
+      <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
+      <annotation name="polkit.message" value="Authentication is required to resize a logical volume"/>
       <arg name="name" type="s" direction="in"/>
       <arg name="size" type="t" direction="in"/>
       <arg name="options" type="a{sv}" direction="in"/>

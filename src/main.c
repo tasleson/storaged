@@ -21,6 +21,7 @@
 
 #include "daemon.h"
 
+#include "invocation.h"
 #include "util.h"
 
 #include <glib/gi18n.h>
@@ -50,6 +51,7 @@ on_bus_acquired (GDBusConnection *connection,
                  const gchar *name,
                  gpointer user_data)
 {
+  ul_invocation_initialize (connection);
   the_daemon = g_object_new (UL_TYPE_DAEMON,
                              "connection", connection,
                              "resource-dir", opt_resources,
@@ -313,6 +315,7 @@ main (int argc,
     g_main_loop_unref (loop);
   if (opt_context != NULL)
     g_option_context_free (opt_context);
+  ul_invocation_cleanup ();
 
   g_info ("udisks-lvm version %s exiting", PACKAGE_VERSION);
 

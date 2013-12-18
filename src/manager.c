@@ -21,10 +21,11 @@
 
 #include "manager.h"
 
-#include "blockobject.h"
+#include "block.h"
 #include "daemon.h"
+#include "invocation.h"
 #include "util.h"
-#include "volumegroupobject.h"
+#include "volumegroup.h"
 
 #include <gudev/gudev.h>
 #include <glib/gi18n.h>
@@ -40,7 +41,6 @@ struct _UlManager
      instances.
   */
   GHashTable *name_to_volume_group;
-  GHashTable *real_block_to_lvm_block;
 
   gint lvm_delayed_update_id;
 
@@ -69,20 +69,27 @@ lvm_update_from_variant (GPid pid,
                          gpointer user_data)
 {
   UlManager *self = user_data;
-  GDBusObjectManagerServer *manager;
+  UlDaemon *daemon;
   GVariantIter var_iter;
   GHashTableIter vg_name_iter;
   gpointer key, value;
   const gchar *name;
+  gchar *path;
 
-  manager = ul_daemon_get_object_manager (ul_daemon_get ());
+  daemon = ul_daemon_get ();
 
-  // Remove obsolete groups
+  if (error != NULL)
+    {
+      g_critical ("%s", error->message);
+      return;
+    }
+
+  /* Remove obsolete groups */
   g_hash_table_iter_init (&vg_name_iter, self->name_to_volume_group);
   while (g_hash_table_iter_next (&vg_name_iter, &key, &value))
     {
       const gchar *vg;
-      UlVolumeGroupObject *group;
+      UlVolumeGroup *group;
       gboolean found = FALSE;
 
       name = key;
@@ -100,9 +107,8 @@ lvm_update_from_variant (GPid pid,
 
       if (!found)
         {
-          ul_volume_group_object_destroy (group);
-          g_dbus_object_manager_server_unexport (manager,
-                                                 g_dbus_object_get_object_path (G_DBUS_OBJECT (group)));
+          /* Object unpublishes itself */
+          g_object_run_dispose (G_OBJECT (group));
           g_hash_table_iter_remove (&vg_name_iter);
         }
     }
@@ -111,16 +117,22 @@ lvm_update_from_variant (GPid pid,
   g_variant_iter_init (&var_iter, volume_groups);
   while (g_variant_iter_next (&var_iter, "&s", &name))
     {
-      UlVolumeGroupObject *group;
+      UlVolumeGroup *group;
       group = g_hash_table_lookup (self->name_to_volume_group, name);
 
       if (group == NULL)
         {
-          group = ul_volume_group_object_new (name);
+          group = ul_volume_group_new (name);
           g_debug ("adding volume group: %s", name);
+
+          path = ul_util_build_object_path ("/org/freedesktop/UDisks2/lvm",
+                                            ul_volume_group_get_name (group), NULL);
+          ul_daemon_publish (daemon, path, TRUE, group);
+          g_free (path);
+
           g_hash_table_insert (self->name_to_volume_group, g_strdup (name), group);
         }
-      ul_volume_group_object_update (group);
+      ul_volume_group_update (group);
     }
 }
 
@@ -197,7 +209,7 @@ find_block (UlManager *self,
       object = g_dbus_interface_get_object (G_DBUS_INTERFACE (real_block));
       path = g_dbus_object_get_object_path (object);
 
-      our_block = LVM_OBJECT (ul_daemon_find_object (ul_daemon_get (), path));
+      our_block = ul_daemon_find_thing (ul_daemon_get (), path, 0);
       g_object_unref (real_block);
     }
 
@@ -251,7 +263,6 @@ on_udisks_interface_added (GDBusObjectManager *udisks_object_manager,
 {
   UlManager *self = user_data;
   GDBusObjectSkeleton *overlay;
-  GDBusObjectManagerServer *object_manager;
   const gchar *path;
 
   if (!UDISKS_IS_BLOCK (interface))
@@ -260,15 +271,12 @@ on_udisks_interface_added (GDBusObjectManager *udisks_object_manager,
   /* Same path as the original real udisks block */
   path = g_dbus_proxy_get_object_path (G_DBUS_PROXY (interface));
 
-  overlay = g_object_new (UL_TYPE_BLOCK_OBJECT,
+  overlay = g_object_new (UL_TYPE_BLOCK,
                           "real-block", interface,
                           "udev-client", self->udev_client,
-                          "g-object-path", path,
                           NULL);
 
-  g_debug ("%s: export block object", path);
-  object_manager = ul_daemon_get_object_manager (ul_daemon_get ());
-  g_dbus_object_manager_server_export (object_manager, overlay);
+  ul_daemon_publish (ul_daemon_get (), path, FALSE, overlay);
   g_object_unref (overlay);
 }
 
@@ -292,7 +300,6 @@ on_udisks_interface_removed (GDBusObjectManager *udisks_object_manager,
                              GDBusInterface *interface,
                              gpointer user_data)
 {
-  GDBusObjectManagerServer *object_manager;
   const gchar *path;
 
   if (!UDISKS_IS_BLOCK (interface))
@@ -301,9 +308,7 @@ on_udisks_interface_removed (GDBusObjectManager *udisks_object_manager,
   /* Same path as the original real udisks block */
   path = g_dbus_proxy_get_object_path (G_DBUS_PROXY (interface));
 
-  g_debug ("%s: unexport block object", path);
-  object_manager = ul_daemon_get_object_manager (ul_daemon_get ());
-  g_dbus_object_manager_server_unexport (object_manager, path);
+  ul_daemon_unpublish (ul_daemon_get (), path, NULL);
 }
 
 static void
@@ -420,23 +425,111 @@ ul_manager_class_init (UlManagerClass *klass)
 }
 
 typedef struct {
-  UlManager *manager;
-  const gchar *name;
-} WaitVolumeGroup;
+  gchar **devices;
+  gchar *vgname;
+  gchar *extent_size;
+} VolumeGroupCreateJobData;
 
-UlVolumeGroupObject *
-ul_manager_find_volume_group_object (UlManager *self,
-                                     const gchar *name)
+static gboolean
+volume_group_create_job_thread (GCancellable *cancellable,
+                                gpointer user_data,
+                                GError **error)
 {
-  return g_hash_table_lookup (self->name_to_volume_group, name);
+  VolumeGroupCreateJobData *data = user_data;
+  gchar *standard_output;
+  gchar *standard_error;
+  gint exit_status;
+  GPtrArray *argv;
+  gboolean ret;
+  gint i;
+
+  for (i = 0; data->devices[i] != NULL; i++)
+    {
+      if (!ul_util_wipe_block (data->devices[i], error))
+        return FALSE;
+    }
+
+  argv = g_ptr_array_new ();
+  g_ptr_array_add (argv, (gchar *)"vgcreate");
+  g_ptr_array_add (argv, data->vgname);
+  if (data->extent_size)
+    {
+      g_ptr_array_add (argv, (gchar *)"-s");
+      g_ptr_array_add (argv, data->extent_size);
+    }
+  for (i = 0; data->devices[i] != NULL; i++)
+    g_ptr_array_add (argv, data->devices[i]);
+  g_ptr_array_add (argv, NULL);
+
+  ret = g_spawn_sync (NULL, (gchar **)argv->pdata, NULL,
+                      G_SPAWN_SEARCH_PATH, NULL, NULL,
+                      &standard_output, &standard_error,
+                      &exit_status, error);
+
+  g_ptr_array_free (argv, TRUE);
+
+  if (ret)
+    {
+      ret = ul_util_check_status_and_output ("vgcreate",
+                                             exit_status, standard_output,
+                                             standard_error, error);
+    }
+
+  g_free (standard_output);
+  g_free (standard_error);
+  return ret;
 }
 
-static GDBusObject *
-wait_for_volume_group_object (UlDaemon *daemon,
-                              gpointer user_data)
+typedef struct {
+  /* This part only accessed by thread */
+  VolumeGroupCreateJobData data;
+
+  GDBusMethodInvocation *invocation;
+  gulong wait_sig;
+} CompleteClosure;
+
+static void
+complete_closure_free (gpointer user_data,
+                       GClosure *unused)
 {
-  WaitVolumeGroup *waitvg = user_data;
-  return G_DBUS_OBJECT (ul_manager_find_volume_group_object (waitvg->manager, waitvg->name));
+  CompleteClosure *complete = user_data;
+  VolumeGroupCreateJobData *data = &complete->data;
+  g_strfreev (data->devices);
+  g_free (data->vgname);
+  g_free (data->extent_size);
+  g_object_unref (complete->invocation);
+  g_free (complete);
+}
+
+static void
+on_create_volume_group (UlDaemon *daemon,
+                        UlVolumeGroup *group,
+                        gpointer user_data)
+{
+  CompleteClosure *complete = user_data;
+
+  if (g_str_equal (ul_volume_group_get_name (group), complete->data.vgname))
+    {
+      lvm_manager_complete_volume_group_create (NULL, complete->invocation,
+                                                ul_volume_group_get_object_path (group));
+      g_signal_handler_disconnect (daemon, complete->wait_sig);
+    }
+}
+
+static void
+on_create_complete (UDisksJob *job,
+                    gboolean success,
+                    gchar *message,
+                    gpointer user_data)
+{
+  CompleteClosure *complete = user_data;
+
+  if (success)
+    return;
+
+  g_dbus_method_invocation_return_error (complete->invocation, UDISKS_ERROR,
+                                         UDISKS_ERROR_FAILED, "Error creating volume group: %s", message);
+  g_signal_handler_disconnect (ul_daemon_get (), complete->wait_sig);
 }
 
 static gboolean
@@ -447,41 +540,16 @@ handle_volume_group_create (LvmManager *manager,
                             guint64 arg_extent_size,
                             GVariant *arg_options)
 {
-  UlManager *self = UL_MANAGER (manager);
-  uid_t caller_uid;
   GError *error = NULL;
-  const gchar *message;
-  const gchar *action_id;
   GList *blocks = NULL;
   GList *l;
   guint n;
+  UlDaemon *daemon;
   gchar *encoded_name = NULL;
-  gchar *escaped_name = NULL;
-  GString *str = NULL;
-  gint status;
-  gchar *error_message = NULL;
-  GDBusObject *group_object = NULL;
-  WaitVolumeGroup waitvg;
+  CompleteClosure *complete;
+  UlJob *job;
 
-  error = NULL;
-  if (!ul_daemon_get_caller_uid_sync (ul_daemon_get (), invocation,
-                                      NULL /* GCancellable */,
-                                      &caller_uid, NULL, NULL, &error))
-    {
-      g_dbus_method_invocation_return_gerror (invocation, error);
-      g_clear_error (&error);
-      goto out;
-    }
-
-  message = N_("Authentication is required to create a volume group");
-  action_id = "com.redhat.lvm2.manage-lvm";
-  if (!ul_daemon_check_authorization_sync (ul_daemon_get (),
-                                           NULL,
-                                           action_id,
-                                           arg_options,
-                                           message,
-                                           invocation))
-    goto out;
+  daemon = ul_daemon_get ();
 
   /* Collect and validate block objects
    *
@@ -493,7 +561,7 @@ handle_volume_group_create (LvmManager *manager,
     {
       GDBusObject *object = NULL;
 
-      object = ul_daemon_find_object (ul_daemon_get (), arg_blocks[n]);
+      object = ul_daemon_find_thing (ul_daemon_get (), arg_blocks[n], 0);
 
       /* Assumes ref, do this early for memory management */
       blocks = g_list_prepend (blocks, object);
@@ -508,7 +576,7 @@ handle_volume_group_create (LvmManager *manager,
           goto out;
         }
 
-      if (!UL_IS_BLOCK_OBJECT (object))
+      if (!UL_IS_BLOCK (object))
         {
           g_dbus_method_invocation_return_error (invocation,
                                                  UDISKS_ERROR,
@@ -518,7 +586,7 @@ handle_volume_group_create (LvmManager *manager,
           goto out;
         }
 
-      if (!ul_block_object_is_unused (UL_BLOCK_OBJECT (object), &error))
+      if (!ul_block_is_unused (UL_BLOCK (object), &error))
         {
           g_dbus_method_invocation_take_error (invocation, error);
           goto out;
@@ -527,83 +595,38 @@ handle_volume_group_create (LvmManager *manager,
 
   blocks = g_list_reverse (blocks);
 
-  /* wipe existing devices */
-  for (l = blocks; l != NULL; l = l->next)
-    {
-      if (!ul_block_object_wipe (l->data, &error))
-        {
-          g_dbus_method_invocation_take_error (invocation, error);
-          goto out;
-        }
-    }
-
   /* Create the volume group... */
-  encoded_name = ul_util_encode_lvm_name (arg_name, FALSE);
-  escaped_name = ul_util_escape_and_quote (encoded_name);
-  str = g_string_new ("vgcreate");
-  g_string_append_printf (str, " %s", escaped_name);
+  complete = g_new0 (CompleteClosure, 1);
+  complete->invocation = g_object_ref (invocation);
+  complete->data.vgname = ul_util_encode_lvm_name (arg_name, FALSE);
   if (arg_extent_size > 0)
-    g_string_append_printf (str, " -s %" G_GUINT64_FORMAT "b", arg_extent_size);
-  for (l = blocks; l != NULL; l = l->next)
+    complete->data.extent_size = g_strdup_printf ("%" G_GUINT64_FORMAT "b", arg_extent_size);
+
+  complete->data.devices = g_new0 (gchar *, n + 1);
+  for (n = 0, l = blocks; l != NULL; l = g_list_next (l), n++)
     {
-      UlBlockObject *block = l->data;
-      gchar *escaped_device;
-      escaped_device = ul_util_escape_and_quote (ul_block_object_get_device (block));
-      g_string_append_printf (str, " %s", escaped_device);
-      g_free (escaped_device);
+      g_assert (arg_blocks[n] != NULL);
+      complete->data.devices[n] = g_strdup (ul_block_get_device (l->data));
     }
 
-  if (!ul_daemon_launch_spawned_job_sync (ul_daemon_get (),
-                                          NULL,
-                                          "lvm-vg-create", caller_uid,
-                                          NULL, /* cancellable */
-                                          0,    /* uid_t run_as_uid */
-                                          0,    /* uid_t run_as_euid */
-                                          &status,
-                                          &error_message,
-                                          NULL, /* input_string */
-                                          "%s",
-                                          str->str))
-    {
-      g_dbus_method_invocation_return_error (invocation,
-                                             UDISKS_ERROR,
-                                             UDISKS_ERROR_FAILED,
-                                             "Error creating volume group: %s",
-                                             error_message);
-      g_free (error_message);
-      goto out;
-    }
+  job = ul_daemon_launch_threaded_job (daemon, NULL,
+                                       "lvm-vg-create",
+                                       ul_invocation_get_caller_uid (invocation),
+                                       volume_group_create_job_thread,
+                                       &complete->data,
+                                       NULL, NULL);
 
-  for (l = blocks; l != NULL; l = l->next)
-    ul_block_object_trigger_uevent (l->data);
+  /* Wait for the job to finish */
+  g_signal_connect (job, "completed", G_CALLBACK (on_create_complete), complete);
 
-  waitvg.manager = self;
-  waitvg.name = encoded_name;
+  /* Wait for the object to appear */
+  complete->wait_sig = g_signal_connect_data (daemon,
+                                              "published::UlVolumeGroup",
+                                              G_CALLBACK (on_create_volume_group),
+                                              complete, complete_closure_free, 0);
 
-  /* ... then, sit and wait for the object to show up */
-  group_object = ul_daemon_wait_for_object_sync (ul_daemon_get (),
-                                                 wait_for_volume_group_object,
-                                                 &waitvg,
-                                                 NULL,
-                                                 10, /* timeout_seconds */
-                                                 &error);
-  if (group_object == NULL)
-    {
-      g_prefix_error (&error,
-                      "Error waiting for volume group object: %s: ",
-                      arg_name);
-      g_dbus_method_invocation_take_error (invocation, error);
-      goto out;
-    }
-
-  lvm_manager_complete_volume_group_create (manager, invocation,
-                                            g_dbus_object_get_object_path (G_DBUS_OBJECT (group_object)));
-
- out:
-  if (str != NULL)
-    g_string_free (str, TRUE);
+out:
   g_list_free_full (blocks, g_object_unref);
-  g_free (escaped_name);
   g_free (encoded_name);
 
   return TRUE; /* returning TRUE means that we handled the method invocation */

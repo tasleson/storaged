@@ -22,7 +22,7 @@
 #ifndef __UL_PHYSICAL_VOLUME_H__
 #define __UL_PHYSICAL_VOLUME_H__
 
-#include "volumegroupobject.h"
+#include "volumegroup.h"
 
 G_BEGIN_DECLS
 
@@ -37,7 +37,7 @@ GType                 ul_physical_volume_get_type   (void) G_GNUC_CONST;
 UlPhysicalVolume *    ul_physical_volume_new        (void);
 
 void                  ul_physical_volume_update     (UlPhysicalVolume *self,
-                                                     UlVolumeGroupObject *group_object,
+                                                     UlVolumeGroup *group,
                                                      GVariant *info);
 
 G_END_DECLS

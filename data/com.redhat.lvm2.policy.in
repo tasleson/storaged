@@ -9,7 +9,116 @@
   <vendor_url>http://udisks.freedesktop.org/</vendor_url>
   <icon_name>drive-removable-media</icon_name>
 
-  <!-- Manage LVM -->
+  <action id="com.redhat.lvm2.create-logical-volume">
+    <_description>Create a Logical Volume</_description>
+    <_message>Authentication is required to create a logical volume</_message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.redhat.lvm2.delete-logical-volume">
+    <_description>Delete a Logical Volume</_description>
+    <_message>Authentication is required to delete a logical volume</_message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.redhat.lvm2.rename-logical-volume">
+    <_description>Rename a Logical Volume</_description>
+    <_message>Authentication is required to rename a logical volume</_message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.redhat.lvm2.resize-logical-volume">
+    <_description>Resize a Logical Volume</_description>
+    <_message>Authentication is required to resize a logical volume</_message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.redhat.lvm2.activate-logical-volume">
+    <_description>Activate a Logical Volume</_description>
+    <_message>Authentication is required to activate a logical volume</_message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.redhat.lvm2.deactivate-logical-volume">
+    <_description>Deactivate a Logical Volume</_description>
+    <_message>Authentication is required to deactivate a logical volume</_message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.redhat.lvm2.snapshot-logical-volume">
+    <_description>Snapshot a Logical Volume</_description>
+    <_message>Authentication is required to create a snapshot of a logical volume</_message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.redhat.lvm2.create-volume-group">
+    <_description>Create a Volume Group</_description>
+    <_message>Authentication is required to create a volume group</_message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.redhat.lvm2.delete-volume-group">
+    <_description>Delete a Volume Group</_description>
+    <_message>Authentication is required to delete a volume group</_message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.redhat.lvm2.rename-volume-group">
+    <_description>Rename a Volume Group</_description>
+    <_message>Authentication is required to rename a volume group</_message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  message = N_("Authentication is required to add a device to a volume group");
+  action_id = "com.redhat.lvm2.add-device";
+
+  message = N_("Authentication is required to remove a device from a volume group");
+  action_id = "com.redhat.lvm2.remove-device";
+
+  message = N_("Authentication is required to empty a device in a volume group");
+  action_id = "com.redhat.lvm2.empty-device";
+
+  <!-- Manage LVM: Overarching priveleges -->
 
   <action id="com.redhat.lvm2.manage-lvm">
     <_description>Manage LVM</_description>
@@ -19,6 +128,21 @@
       <allow_inactive>auth_admin</allow_inactive>
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
+    <annotate key="org.freedesktop.policykit.imply">
+      com.redhat.lvm2.create-volume-group
+      com.redhat.lvm2.delete-volume-group
+      com.redhat.lvm2.rename-volume-group
+      com.redhat.lvm2.add-device
+      com.redhat.lvm2.remove-device
+      com.redhat.lvm2.empty-device
+      com.redhat.lvm2.create-logical-volume
+      com.redhat.lvm2.delete-logical-volume
+      com.redhat.lvm2.rename-logical-volume
+      com.redhat.lvm2.resize-logical-volume
+      com.redhat.lvm2.activate-logical-volume
+      com.redhat.lvm2.deactivate-logical-volume
+      com.redhat.lvm2.snapshot-logical-volume
+    </annotate>
   </action>
 
 </policyconfig>

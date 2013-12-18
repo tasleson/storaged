@@ -24,7 +24,6 @@
 #include "daemon.h"
 #include "physicalvolume.h"
 #include "volumegroup.h"
-#include "volumegroupobject.h"
 #include "util.h"
 
 #include <glib/gi18n-lib.h>
@@ -67,8 +66,7 @@ G_DEFINE_TYPE_WITH_CODE (UlPhysicalVolume, ul_physical_volume,
 static void
 ul_physical_volume_init (UlPhysicalVolume *self)
 {
-  g_dbus_interface_skeleton_set_flags (G_DBUS_INTERFACE_SKELETON (self),
-                                       G_DBUS_INTERFACE_SKELETON_FLAGS_HANDLE_METHOD_INVOCATIONS_IN_THREAD);
+
 }
 
 static void
@@ -101,7 +99,7 @@ ul_physical_volume_new (void)
  */
 void
 ul_physical_volume_update (UlPhysicalVolume *self,
-                           UlVolumeGroupObject *group_object,
+                           UlVolumeGroup *group,
                            GVariant *info)
 {
   LvmPhysicalVolumeBlock *iface;
@@ -109,7 +107,7 @@ ul_physical_volume_update (UlPhysicalVolume *self,
 
   iface = LVM_PHYSICAL_VOLUME_BLOCK (self);
 
-  lvm_physical_volume_block_set_volume_group (iface, g_dbus_object_get_object_path (G_DBUS_OBJECT (group_object)));
+  lvm_physical_volume_block_set_volume_group (iface, ul_volume_group_get_object_path (group));
 
   if (g_variant_lookup (info, "size", "t", &num))
     lvm_physical_volume_block_set_size (iface, num);

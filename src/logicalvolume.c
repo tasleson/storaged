@@ -24,12 +24,11 @@
 
 #include "logicalvolume.h"
 
-#include "blockobject.h"
+#include "block.h"
 #include "daemon.h"
-#include "logicalvolumeobject.h"
+#include "invocation.h"
 #include "util.h"
 #include "volumegroup.h"
-#include "volumegroupobject.h"
 
 /**
  * SECTION:udiskslinuxlogicalvolume
@@ -51,11 +50,22 @@ typedef struct _UlLogicalVolumeClass   UlLogicalVolumeClass;
 struct _UlLogicalVolume
 {
   LvmLogicalVolumeSkeleton parent_instance;
+
+  gchar *name;
+  UlVolumeGroup *volume_group;
 };
 
 struct _UlLogicalVolumeClass
 {
   LvmLogicalVolumeSkeletonClass parent_class;
+};
+
+enum
+{
+  PROP_0,
+  PROP_NAME,
+  PROP_GROUP,
+  PROP_VOLUME_GROUP,
 };
 
 static void logical_volume_iface_init (LvmLogicalVolumeIface *iface);
@@ -69,14 +79,141 @@ G_DEFINE_TYPE_WITH_CODE (UlLogicalVolume, ul_logical_volume, LVM_TYPE_LOGICAL_VO
 static void
 ul_logical_volume_init (UlLogicalVolume *self)
 {
-  g_dbus_interface_skeleton_set_flags (G_DBUS_INTERFACE_SKELETON (self),
-                                       G_DBUS_INTERFACE_SKELETON_FLAGS_HANDLE_METHOD_INVOCATIONS_IN_THREAD);
+
+}
+
+static void
+ul_logical_volume_dispose (GObject *obj)
+{
+  UlLogicalVolume *self = UL_LOGICAL_VOLUME (obj);
+  const gchar *path;
+
+  path = ul_logical_volume_get_object_path (self);
+  if (path != NULL)
+    ul_daemon_unpublish (ul_daemon_get (), path, self);
+
+  G_OBJECT_CLASS (ul_logical_volume_parent_class)->dispose (obj);
+}
+
+static void
+ul_logical_volume_finalize (GObject *obj)
+{
+  UlLogicalVolume *self = UL_LOGICAL_VOLUME (obj);
+
+  g_free (self->name);
+
+  G_OBJECT_CLASS (ul_logical_volume_parent_class)->finalize (obj);
+}
+
+static void
+ul_logical_volume_get_property (GObject *obj,
+                                guint prop_id,
+                                GValue *value,
+                                GParamSpec *pspec)
+{
+  UlLogicalVolume *self = UL_LOGICAL_VOLUME (obj);
+
+  switch (prop_id)
+    {
+    case PROP_NAME:
+      g_value_set_string (value, ul_logical_volume_get_name (self));
+      break;
+    case PROP_GROUP:
+      g_value_set_object (value, ul_logical_volume_get_volume_group (self));
+      break;
+    case PROP_VOLUME_GROUP:
+      if (self->volume_group)
+        g_value_set_string (value, ul_volume_group_get_object_path (self->volume_group));
+      else
+        g_value_set_string (value, "/");
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (obj, prop_id, pspec);
+      break;
+    }
+}
+
+static void
+ul_logical_volume_set_property (GObject *obj,
+                                guint prop_id,
+                                const GValue *value,
+                                GParamSpec *pspec)
+{
+  UlLogicalVolume *self = UL_LOGICAL_VOLUME (obj);
+
+  switch (prop_id)
+    {
+    case PROP_NAME:
+      g_free (self->name);
+      self->name = g_value_dup_string (value);
+      break;
+    case PROP_GROUP:
+      ul_logical_volume_set_volume_group (self, g_value_get_object (value));
+      break;
+    case PROP_VOLUME_GROUP:
+      g_assert_not_reached ();
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (obj, prop_id, pspec);
+      break;
+    }
 }
 
 static void
 ul_logical_volume_class_init (UlLogicalVolumeClass *klass)
 {
+  GObjectClass *gobject_class;
 
+  gobject_class = G_OBJECT_CLASS (klass);
+  gobject_class->dispose = ul_logical_volume_dispose;
+  gobject_class->finalize = ul_logical_volume_finalize;
+  gobject_class->set_property = ul_logical_volume_set_property;
+  gobject_class->get_property = ul_logical_volume_get_property;
+
+  /**
+   * UlLogicalVolumeObject:name:
+   *
+   * The name of the logical volume.
+   */
+  g_object_class_install_property (gobject_class,
+                                   PROP_NAME,
+                                   g_param_spec_string ("name",
+                                                        "Name",
+                                                        "The name of the volume group",
+                                                        NULL,
+                                                        G_PARAM_WRITABLE |
+                                                        G_PARAM_READABLE |
+                                                        G_PARAM_STATIC_STRINGS));
+
+  /**
+    * UlLogicalVolume:group:
+    *
+    * The volume group.
+    */
+   g_object_class_install_property (gobject_class,
+                                    PROP_GROUP,
+                                    g_param_spec_object ("group",
+                                                         "Volume Group",
+                                                         "The volume group as an object",
+                                                         UL_TYPE_VOLUME_GROUP,
+                                                         G_PARAM_READABLE |
+                                                         G_PARAM_WRITABLE |
+                                                         G_PARAM_STATIC_STRINGS));
+
+   /**
+     * UlLogicalVolume:volume_group:
+     *
+     * The volume group.
+     */
+    g_object_class_install_property (gobject_class,
+                                     PROP_VOLUME_GROUP,
+                                     g_param_spec_string ("volume-group",
+                                                          "Volume Group",
+                                                          "The volume group as an object path",
+                                                          "/",
+                                                          G_PARAM_READABLE |
+                                                          G_PARAM_WRITABLE |
+                                                          G_PARAM_STATIC_STRINGS));
 }
 
 /**
@@ -87,9 +224,16 @@ ul_logical_volume_class_init (UlLogicalVolumeClass *klass)
  * Returns: A new #UlLogicalVolume. Free with g_object_unref().
  */
 UlLogicalVolume *
-ul_logical_volume_new (void)
+ul_logical_volume_new (UlVolumeGroup *group,
+                       const gchar *name)
 {
-  return g_object_new (UL_TYPE_LOGICAL_VOLUME, NULL);
+  g_return_val_if_fail (UL_IS_VOLUME_GROUP (group), NULL);
+  g_return_val_if_fail (name != NULL, NULL);
+
+  return g_object_new (UL_TYPE_LOGICAL_VOLUME,
+                       "group", group,
+                       "name", name,
+                       NULL);
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
@@ -104,7 +248,7 @@ ul_logical_volume_new (void)
  */
 void
 ul_logical_volume_update (UlLogicalVolume *self,
-                          UlVolumeGroupObject *group_object,
+                          UlVolumeGroup *group,
                           GVariant *info,
                           gboolean *needs_polling_ret)
 {
@@ -175,9 +319,9 @@ ul_logical_volume_update (UlLogicalVolume *self,
   if (g_variant_lookup (info, "pool_lv", "&s", &str)
       && str != NULL && *str)
     {
-      UlLogicalVolumeObject *pool_object = ul_volume_group_object_find_logical_volume_object (group_object, str);
-      if (pool_object)
-        pool_objpath = g_dbus_object_get_object_path (G_DBUS_OBJECT (pool_object));
+      UlLogicalVolume *pool = ul_volume_group_find_logical_volume (group, str);
+      if (pool)
+        pool_objpath = ul_logical_volume_get_object_path (pool);
     }
   lvm_logical_volume_set_thin_pool (iface, pool_objpath);
 
@@ -185,133 +329,119 @@ ul_logical_volume_update (UlLogicalVolume *self,
   if (g_variant_lookup (info, "origin", "&s", &str)
       && str != NULL && *str)
     {
-      UlLogicalVolumeObject *origin_object = ul_volume_group_object_find_logical_volume_object (group_object, str);
-      if (origin_object)
-        origin_objpath = g_dbus_object_get_object_path (G_DBUS_OBJECT (origin_object));
+      UlLogicalVolume *origin = ul_volume_group_find_logical_volume (group, str);
+      if (origin)
+        origin_objpath = ul_logical_volume_get_object_path (origin);
     }
   lvm_logical_volume_set_origin (iface, origin_objpath);
 
-  lvm_logical_volume_set_volume_group (iface, g_dbus_object_get_object_path (G_DBUS_OBJECT (group_object)));
+  ul_logical_volume_set_volume_group (self, group);
+}
+
+typedef struct {
+  GDBusMethodInvocation *invocation;
+  gpointer wait_thing;
+  gchar *wait_name;
+  guint wait_sig;
+} CompleteClosure;
+
+static void
+complete_closure_free (gpointer data,
+                       GClosure *unused)
+{
+  CompleteClosure *complete = data;
+  g_free (complete->wait_name);
+  g_clear_object (&complete->wait_thing);
+  g_object_unref (complete->invocation);
+  g_free (complete);
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
+
+static void
+on_complete_delete (UDisksJob *job,
+                    gboolean success,
+                    gchar *message,
+                    gpointer user_data)
+{
+  GDBusMethodInvocation *invocation = user_data;
+  if (success)
+    {
+      lvm_logical_volume_complete_delete (NULL, invocation);
+    }
+  else
+    {
+      g_dbus_method_invocation_return_error (invocation, UDISKS_ERROR, UDISKS_ERROR_FAILED,
+                                             "Error deleting logical volume: %s", message);
+    }
+}
 
 static gboolean
 handle_delete (LvmLogicalVolume *volume,
                GDBusMethodInvocation *invocation,
                GVariant *options)
 {
-  GError *error = NULL;
-  UlLogicalVolumeObject *object = NULL;
+  UlLogicalVolume *self = UL_LOGICAL_VOLUME (volume);
+  gchar *full_name = NULL;
+  UlVolumeGroup *group;
   UlDaemon *daemon;
-  const gchar *action_id;
-  const gchar *message;
-  uid_t caller_uid;
-  gid_t caller_gid;
-  UlVolumeGroupObject *group_object;
-  gchar *escaped_group_name = NULL;
-  gchar *escaped_name = NULL;
-  gchar *error_message = NULL;
-
-  object = UL_LOGICAL_VOLUME_OBJECT (g_dbus_interface_dup_object (G_DBUS_INTERFACE (volume)));
-  g_return_val_if_fail (object != NULL, FALSE);
+  UlJob *job;
 
   daemon = ul_daemon_get ();
 
-  if (!ul_daemon_get_caller_uid_sync (daemon,
-                                      invocation,
-                                      NULL /* GCancellable */,
-                                      &caller_uid,
-                                      &caller_gid,
-                                      NULL,
-                                      &error))
-    {
-      g_dbus_method_invocation_return_gerror (invocation, error);
-      g_error_free (error);
-      goto out;
-    }
+  group = ul_logical_volume_get_volume_group (self);
+  full_name = g_strdup_printf ("%s/%s",
+                               ul_volume_group_get_name (group),
+                               ul_logical_volume_get_name (self));
 
-  message = N_("Authentication is required to delete a logical volume");
-  action_id = "com.redhat.lvm2.manage-lvm";
-  if (!ul_daemon_check_authorization_sync (daemon,
-                                           LVM_OBJECT (object),
-                                           action_id,
-                                           options,
-                                           message,
-                                           invocation))
-    goto out;
+  job = ul_daemon_launch_spawned_job (daemon, self,
+                                      "lvm-lvol-delete",
+                                      ul_invocation_get_caller_uid (invocation),
+                                      NULL, /* GCancellable */
+                                      0,    /* uid_t run_as_uid */
+                                      0,    /* uid_t run_as_euid */
+                                      NULL,  /* input_string */
+                                      "lvremove", "-f", full_name, NULL);
 
-  group_object = ul_logical_volume_object_get_volume_group (object);
-  escaped_group_name = ul_util_escape_and_quote (ul_volume_group_object_get_name (group_object));
-  escaped_name = ul_util_escape_and_quote (ul_logical_volume_object_get_name (object));
+  g_signal_connect_data (job, "completed", G_CALLBACK (on_complete_delete),
+                         g_object_ref (invocation), (GClosureNotify)g_object_unref, 0);
 
-  if (!ul_daemon_launch_spawned_job_sync (daemon,
-                                          LVM_OBJECT (object),
-                                          "lvm-lvol-delete", caller_uid,
-                                          NULL, /* GCancellable */
-                                          0,    /* uid_t run_as_uid */
-                                          0,    /* uid_t run_as_euid */
-                                          NULL, /* gint *out_status */
-                                          &error_message,
-                                          NULL,  /* input_string */
-                                          "lvremove -f %s/%s",
-                                          escaped_group_name,
-                                          escaped_name))
-    {
-      g_dbus_method_invocation_return_error (invocation,
-                                             UDISKS_ERROR,
-                                             UDISKS_ERROR_FAILED,
-                                             "Error deleting logical volume: %s",
-                                             error_message);
-      goto out;
-    }
-
-  lvm_logical_volume_complete_delete (volume, invocation);
-
- out:
-  g_free (error_message);
-  g_free (escaped_name);
-  g_free (escaped_group_name);
-  g_clear_object (&object);
+  g_free (full_name);
   return TRUE;
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
 
-struct WaitData {
-  UlVolumeGroupObject *group_object;
-  const gchar *name;
-};
-
-static GDBusObject *
-wait_for_logical_volume_object (UlDaemon *daemon,
-                                gpointer user_data)
+static void
+on_rename_logical_volume (UlDaemon *daemon,
+                          UlLogicalVolume *volume,
+                          gpointer user_data)
 {
-  struct WaitData *data = user_data;
-  return G_DBUS_OBJECT (ul_volume_group_object_find_logical_volume_object (data->group_object,
-                                                                           data->name));
+  CompleteClosure *complete = user_data;
+
+  if (g_str_equal (ul_logical_volume_get_name (volume), complete->wait_name) &&
+      ul_logical_volume_get_volume_group (volume) == UL_VOLUME_GROUP (complete->wait_thing))
+    {
+      lvm_logical_volume_complete_rename (NULL, complete->invocation,
+                                          ul_logical_volume_get_object_path (volume));
+      g_signal_handler_disconnect (daemon, complete->wait_sig);
+    }
 }
 
-static const gchar *
-wait_for_logical_volume_path (UlVolumeGroupObject *group_object,
-                              const gchar *name,
-                              GError **error)
+static void
+on_rename_complete (UDisksJob *job,
+                    gboolean success,
+                    gchar *message,
+                    gpointer user_data)
 {
-  struct WaitData data;
-  GDBusObject *volume_object;
+  CompleteClosure *complete = user_data;
 
-  data.group_object = group_object;
-  data.name = name;
-  volume_object = ul_daemon_wait_for_object_sync (ul_daemon_get (),
-                                                  wait_for_logical_volume_object,
-                                                  &data,
-                                                  NULL,
-                                                  10, /* timeout_seconds */
-                                                  error);
-  if (volume_object == NULL)
-    return NULL;
+  if (success)
+    return;
 
-  return g_dbus_object_get_object_path (volume_object);
+  g_dbus_method_invocation_return_error (complete->invocation, UDISKS_ERROR,
+                                         UDISKS_ERROR_FAILED, "Error renaming logical volume: %s", message);
+  g_signal_handler_disconnect (ul_daemon_get (), complete->wait_sig);
 }
 
 static gboolean
@@ -320,100 +450,70 @@ handle_rename (LvmLogicalVolume *volume,
                const gchar *new_name,
                GVariant *options)
 {
-  GError *error = NULL;
-  UlLogicalVolumeObject *object = NULL;
   UlDaemon *daemon;
-  const gchar *action_id;
-  const gchar *message;
-  uid_t caller_uid;
-  gid_t caller_gid;
-  UlVolumeGroupObject *group_object;
-  gchar *escaped_group_name = NULL;
-  gchar *escaped_name = NULL;
+  UlLogicalVolume *self = UL_LOGICAL_VOLUME (volume);
+  UlVolumeGroup *group;
+  gchar *full_name = NULL;
   gchar *encoded_new_name = NULL;
-  gchar *escaped_new_name = NULL;
   gchar *error_message = NULL;
-  const gchar *lv_objpath;
-
-  object = UL_LOGICAL_VOLUME_OBJECT (g_dbus_interface_dup_object (G_DBUS_INTERFACE (volume)));
-  g_return_val_if_fail (object != NULL, FALSE);
+  CompleteClosure *complete;
+  UlJob *job;
 
   daemon = ul_daemon_get ();
 
-  if (!ul_daemon_get_caller_uid_sync (daemon,
-                                      invocation,
-                                      NULL /* GCancellable */,
-                                      &caller_uid,
-                                      &caller_gid,
-                                      NULL,
-                                      &error))
-    {
-      g_dbus_method_invocation_return_gerror (invocation, error);
-      g_error_free (error);
-      goto out;
-    }
-
-  message = N_("Authentication is required to rename a logical volume");
-  action_id = "com.redhat.lvm2.manage-lvm";
-  if (!ul_daemon_check_authorization_sync (daemon,
-                                           LVM_OBJECT (object),
-                                           action_id,
-                                           options,
-                                           message,
-                                           invocation))
-    goto out;
-
-  group_object = ul_logical_volume_object_get_volume_group (object);
-  escaped_group_name = ul_util_escape_and_quote (ul_volume_group_object_get_name (group_object));
-  escaped_name = ul_util_escape_and_quote (ul_logical_volume_object_get_name (object));
+  group = ul_logical_volume_get_volume_group (self);
+  full_name = g_strdup_printf ("%s/%s",
+                               ul_volume_group_get_name (group),
+                               ul_logical_volume_get_name (self));
   encoded_new_name = ul_util_encode_lvm_name (new_name, TRUE);
-  escaped_new_name = ul_util_escape_and_quote (encoded_new_name);
 
-  if (!ul_daemon_launch_spawned_job_sync (daemon,
-                                          LVM_OBJECT (object),
-                                          "lvm-vg-rename", caller_uid,
-                                          NULL, /* GCancellable */
-                                          0,    /* uid_t run_as_uid */
-                                          0,    /* uid_t run_as_euid */
-                                          NULL, /* gint *out_status */
-                                          &error_message,
-                                          NULL,  /* input_string */
-                                          "lvrename %s/%s %s",
-                                          escaped_group_name,
-                                          escaped_name,
-                                          escaped_new_name))
-    {
-      g_dbus_method_invocation_return_error (invocation,
-                                             UDISKS_ERROR,
-                                             UDISKS_ERROR_FAILED,
-                                             "Error renaming volume volume: %s",
-                                             error_message);
-      goto out;
-    }
+  job = ul_daemon_launch_spawned_job (daemon, self,
+                                      "lvm-vg-rename",
+                                      ul_invocation_get_caller_uid (invocation),
+                                      NULL, /* GCancellable */
+                                      0,    /* uid_t run_as_uid */
+                                      0,    /* uid_t run_as_euid */
+                                      NULL,  /* input_string */
+                                      "lvrename", full_name, encoded_new_name, NULL);
 
-  lv_objpath = wait_for_logical_volume_path (group_object, encoded_new_name, &error);
-  if (lv_objpath == NULL)
-    {
-      g_prefix_error (&error,
-                      "Error waiting for logical volume object for %s",
-                      new_name);
-      g_dbus_method_invocation_take_error (invocation, error);
-      goto out;
-    }
+  complete = g_new0 (CompleteClosure, 1);
+  complete->invocation = g_object_ref (invocation);
+  complete->wait_thing = g_object_ref (group);
+  complete->wait_name = encoded_new_name;
 
-  lvm_logical_volume_complete_rename (volume, invocation, lv_objpath);
+  /* Wait for the job to finish */
+  g_signal_connect (job, "completed", G_CALLBACK (on_rename_complete), complete);
 
- out:
+  /* Wait for the object to appear */
+  complete->wait_sig = g_signal_connect_data (daemon,
+                                              "published::UlLogicalVolume",
+                                              G_CALLBACK (on_rename_logical_volume),
+                                              complete, complete_closure_free, 0);
+
   g_free (error_message);
-  g_free (escaped_name);
-  g_free (escaped_group_name);
-  g_free (encoded_new_name);
-  g_free (escaped_new_name);
-  g_clear_object (&object);
+  g_free (full_name);
   return TRUE;
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
+
+static void
+on_resize_complete (UDisksJob *job,
+                    gboolean success,
+                    gchar *message,
+                    gpointer user_data)
+{
+  GDBusMethodInvocation *invocation = user_data;
+  if (success)
+    {
+      lvm_logical_volume_complete_resize (NULL, invocation);
+    }
+  else
+    {
+      g_dbus_method_invocation_return_error (invocation, UDISKS_ERROR, UDISKS_ERROR_FAILED,
+                                             "Error resizing logical volume: %s", message);
+    }
+}
 
 static gboolean
 handle_resize (LvmLogicalVolume *volume,
@@ -423,124 +523,88 @@ handle_resize (LvmLogicalVolume *volume,
                guint64 stripesize,
                GVariant *options)
 {
-  GError *error = NULL;
-  UlLogicalVolumeObject *object = NULL;
+  UlLogicalVolume *self = UL_LOGICAL_VOLUME (volume);
+  UlVolumeGroup *group;
   UlDaemon *daemon;
-  const gchar *action_id;
-  const gchar *message;
-  uid_t caller_uid;
-  gid_t caller_gid;
-  UlVolumeGroupObject *group_object;
-  GString *cmd = NULL;
-  gchar *escaped_group_name = NULL;
-  gchar *escaped_name = NULL;
-  gchar *error_message = NULL;
-
-  object = UL_LOGICAL_VOLUME_OBJECT (g_dbus_interface_dup_object (G_DBUS_INTERFACE (volume)));
-  g_return_val_if_fail (object != NULL, FALSE);
+  UlJob *job;
+  GPtrArray *args;
 
   daemon = ul_daemon_get ();
 
-  if (!ul_daemon_get_caller_uid_sync (daemon,
-                                      invocation,
-                                      NULL /* GCancellable */,
-                                      &caller_uid,
-                                      &caller_gid,
-                                      NULL,
-                                      &error))
-    {
-      g_dbus_method_invocation_return_gerror (invocation, error);
-      g_error_free (error);
-      goto out;
-    }
-
-  message = N_("Authentication is required to rename a logical volume");
-  action_id = "com.redhat.lvm2.manage-lvm";
-  if (!ul_daemon_check_authorization_sync (daemon,
-                                           LVM_OBJECT (object),
-                                           action_id,
-                                           options,
-                                           message,
-                                           invocation))
-    goto out;
-
-  group_object = ul_logical_volume_object_get_volume_group (object);
-  escaped_group_name = ul_util_escape_and_quote (ul_volume_group_object_get_name (group_object));
-  escaped_name = ul_util_escape_and_quote (ul_logical_volume_object_get_name (object));
+  group = ul_logical_volume_get_volume_group (self);
   new_size -= new_size % 512;
 
-  cmd = g_string_new ("");
-  g_string_append_printf (cmd, "lvresize %s/%s -r -L %" G_GUINT64_FORMAT "b",
-                          escaped_group_name, escaped_name, new_size);
+  args = g_ptr_array_new_with_free_func (g_free);
+  g_ptr_array_add (args, g_strdup ("lvresize"));
+  g_ptr_array_add (args, g_strdup_printf ("%s/%s",
+                                          ul_volume_group_get_name (group),
+                                          ul_logical_volume_get_name (self)));
+  g_ptr_array_add (args, g_strdup_printf ("-L%" G_GUINT64_FORMAT "b", new_size));
 
   if (stripes > 0)
-    g_string_append_printf (cmd, " -i %d", stripes);
-
-  if (stripesize > 0)
-    g_string_append_printf (cmd, " -I %" G_GUINT64_FORMAT "b", stripesize);
-
-  if (!ul_daemon_launch_spawned_job_sync (daemon,
-                                          LVM_OBJECT (object),
-                                          "lvm-vg-resize", caller_uid,
-                                          NULL, /* GCancellable */
-                                          0,    /* uid_t run_as_uid */
-                                          0,    /* uid_t run_as_euid */
-                                          NULL, /* gint *out_status */
-                                          &error_message,
-                                          NULL,  /* input_string */
-                                          "%s", cmd->str))
     {
-      g_dbus_method_invocation_return_error (invocation,
-                                             UDISKS_ERROR,
-                                             UDISKS_ERROR_FAILED,
-                                             "Error resizing logical volume: %s",
-                                             error_message);
-      goto out;
+      g_ptr_array_add (args, g_strdup ("-i"));
+      g_ptr_array_add (args, g_strdup_printf ("%d", stripes));
     }
 
-  lvm_logical_volume_complete_resize (volume, invocation);
+  if (stripesize > 0)
+    {
+      g_ptr_array_add (args, g_strdup ("-I"));
+      g_ptr_array_add (args, g_strdup_printf ("%" G_GUINT64_FORMAT "b", stripesize));
+    }
 
- out:
-  if (cmd)
-    g_string_free (cmd, TRUE);
-  g_free (error_message);
-  g_free (escaped_name);
-  g_free (escaped_group_name);
-  g_clear_object (&object);
+  g_ptr_array_add (args, NULL);
+
+  job = ul_daemon_launch_spawned_jobv (daemon, self,
+                                       "lvm-vg-resize",
+                                       ul_invocation_get_caller_uid (invocation),
+                                       NULL, /* GCancellable */
+                                       0,    /* uid_t run_as_uid */
+                                       0,    /* uid_t run_as_euid */
+                                       NULL,  /* input_string */
+                                       (const gchar **)args->pdata);
+
+  g_signal_connect_data (job, "completed", G_CALLBACK (on_resize_complete),
+                         g_object_ref (invocation), (GClosureNotify)g_object_unref, 0);
+
+  g_ptr_array_free (args, TRUE);
   return TRUE;
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
 
-static GDBusObject *
-wait_for_logical_volume_block_object (UlDaemon *daemon,
-                                      gpointer user_data)
+static void
+on_activate_logical_volume_block (UlDaemon *daemon,
+                                  LvmLogicalVolumeBlock *block,
+                                  gpointer user_data)
 {
-  UlLogicalVolumeObject *volume_object = user_data;
-  LvmLogicalVolumeBlock *logical_volume;
-  const gchar *volume_objpath;
-  GList *objects, *l;
-  GDBusObject *ret = NULL;
+  CompleteClosure *complete = user_data;
+  UlLogicalVolume *volume = complete->wait_thing;
+  const gchar *path;
 
-  volume_objpath = g_dbus_object_get_object_path (G_DBUS_OBJECT (volume_object));
-
-  objects = ul_daemon_get_objects (daemon);
-  for (l = objects; l != NULL; l = l->next)
+  if (g_strcmp0 (lvm_logical_volume_block_get_logical_volume (block),
+                 ul_logical_volume_get_object_path (volume)) == 0)
     {
-      logical_volume = lvm_object_peek_logical_volume_block (l->data);
-      if (logical_volume == NULL)
-        continue;
-
-      if (g_strcmp0 (lvm_logical_volume_block_get_logical_volume (logical_volume), volume_objpath) == 0)
-        {
-          ret = g_object_ref (l->data);
-          goto out;
-        }
+      path = g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (block));
+      lvm_logical_volume_complete_activate (NULL, complete->invocation, path);
+      g_signal_handler_disconnect (daemon, complete->wait_sig);
     }
+}
 
- out:
-  g_list_free_full (objects, g_object_unref);
-  return ret;
+static void
+on_activate_complete (UDisksJob *job,
+                      gboolean success,
+                      gchar *message,
+                      gpointer user_data)
+{
+  CompleteClosure *complete = user_data;
+
+  if (success)
+    return;
+
+  g_dbus_method_invocation_return_error (complete->invocation, UDISKS_ERROR, UDISKS_ERROR_FAILED,
+                                         "Error activating logical volume: %s", message);
+  g_signal_handler_disconnect (ul_daemon_get (), complete->wait_sig);
 }
 
 static gboolean
@@ -548,184 +612,130 @@ handle_activate (LvmLogicalVolume *volume,
                  GDBusMethodInvocation *invocation,
                  GVariant *options)
 {
-  GError *error = NULL;
-
-  UlLogicalVolumeObject *object = NULL;
+  UlLogicalVolume *self = UL_LOGICAL_VOLUME (volume);
+  UlVolumeGroup *group;
   UlDaemon *daemon;
-  const gchar *action_id;
-  const gchar *message;
-  uid_t caller_uid;
-  gid_t caller_gid;
-  UlVolumeGroupObject *group_object;
-  gchar *escaped_group_name = NULL;
-  gchar *escaped_name = NULL;
-  gchar *error_message = NULL;
-  GDBusObject *block_object = NULL;
-
-  object = UL_LOGICAL_VOLUME_OBJECT (g_dbus_interface_dup_object (G_DBUS_INTERFACE (volume)));
-  g_return_val_if_fail (object != NULL, FALSE);
+  gchar *full_name = NULL;
+  CompleteClosure *complete;
+  UlJob *job;
 
   daemon = ul_daemon_get ();
+  group = ul_logical_volume_get_volume_group (self);
+  full_name = g_strdup_printf ("%s/%s", ul_volume_group_get_name (group),
+                               ul_logical_volume_get_name (self));
 
-  if (!ul_daemon_get_caller_uid_sync (daemon,
-                                               invocation,
-                                               NULL /* GCancellable */,
-                                               &caller_uid,
-                                               &caller_gid,
-                                               NULL,
-                                               &error))
-    {
-      g_dbus_method_invocation_return_gerror (invocation, error);
-      g_error_free (error);
-      goto out;
-    }
+  job = ul_daemon_launch_spawned_job (daemon, self,
+                                      "lvm-lvol-activate",
+                                      ul_invocation_get_caller_uid (invocation),
+                                      NULL, /* GCancellable */
+                                      0,    /* uid_t run_as_uid */
+                                      0,    /* uid_t run_as_euid */
+                                      NULL,  /* input_string */
+                                      "lvchange", full_name, "-a", "y", NULL);
 
-  message = N_("Authentication is required to activate a logical volume");
-  action_id = "com.redhat.lvm2.manage-lvm";
-  if (!ul_daemon_check_authorization_sync (daemon,
-                                           LVM_OBJECT (object),
-                                           action_id,
-                                           options,
-                                           message,
-                                           invocation))
-    goto out;
+  complete = g_new0 (CompleteClosure, 1);
+  complete->wait_thing = g_object_ref (self);
+  complete->invocation = g_object_ref (invocation);
 
-  group_object = ul_logical_volume_object_get_volume_group (object);
-  escaped_group_name = ul_util_escape_and_quote (ul_volume_group_object_get_name (group_object));
-  escaped_name = ul_util_escape_and_quote (ul_logical_volume_object_get_name (object));
+  /* Wait for the job to finish */
+  g_signal_connect (job, "completed", G_CALLBACK (on_activate_complete), complete);
 
-  if (!ul_daemon_launch_spawned_job_sync (daemon,
-                                          LVM_OBJECT (object),
-                                          "lvm-lvol-activate", caller_uid,
-                                          NULL, /* GCancellable */
-                                          0,    /* uid_t run_as_uid */
-                                          0,    /* uid_t run_as_euid */
-                                          NULL, /* gint *out_status */
-                                          &error_message,
-                                          NULL,  /* input_string */
-                                          "lvchange %s/%s -a y",
-                                          escaped_group_name,
-                                          escaped_name))
-    {
-      g_dbus_method_invocation_return_error (invocation,
-                                             UDISKS_ERROR,
-                                             UDISKS_ERROR_FAILED,
-                                             "Error deleting logical volume: %s",
-                                             error_message);
-      goto out;
-    }
+  /* Wait for the object to appear */
+  complete->wait_sig = g_signal_connect_data (daemon,
+                                              "published::LvmLogicalVolumeBlockSkeleton",
+                                              G_CALLBACK (on_activate_logical_volume_block),
+                                              complete, complete_closure_free, 0);
 
-  block_object = ul_daemon_wait_for_object_sync (daemon,
-                                                 wait_for_logical_volume_block_object,
-                                                 object,
-                                                 NULL,
-                                                 10, /* timeout_seconds */
-                                                 &error);
-  if (block_object == NULL)
-    {
-      g_prefix_error (&error,
-                      "Error waiting for block object for %s",
-                      lvm_logical_volume_get_name (volume));
-      g_dbus_method_invocation_take_error (invocation, error);
-      goto out;
-    }
-
-  lvm_logical_volume_complete_activate (volume, invocation,
-                                        g_dbus_object_get_object_path (G_DBUS_OBJECT (block_object)));
-
- out:
-  g_free (error_message);
-  g_free (escaped_name);
-  g_free (escaped_group_name);
-  g_clear_object (&block_object);
-  g_clear_object (&object);
+  g_free (full_name);
   return TRUE;
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
+
+static void
+on_deactivate_complete (UDisksJob *job,
+                        gboolean success,
+                        gchar *message,
+                        gpointer user_data)
+{
+  GDBusMethodInvocation *invocation = user_data;
+  if (success)
+    {
+      lvm_logical_volume_complete_deactivate (NULL, invocation);
+    }
+  else
+    {
+      g_dbus_method_invocation_return_error (invocation, UDISKS_ERROR, UDISKS_ERROR_FAILED,
+                                             "Error deactivating logical volume: %s", message);
+    }
+}
 
 static gboolean
 handle_deactivate (LvmLogicalVolume *volume,
                    GDBusMethodInvocation *invocation,
                    GVariant *options)
 {
-  GError *error = NULL;
-
-  UlLogicalVolumeObject *object = NULL;
+  UlLogicalVolume *self = UL_LOGICAL_VOLUME (volume);
+  UlVolumeGroup *group;
   UlDaemon *daemon;
-  const gchar *action_id;
-  const gchar *message;
-  uid_t caller_uid;
-  gid_t caller_gid;
-  UlVolumeGroupObject *group_object;
-  gchar *escaped_group_name = NULL;
-  gchar *escaped_name = NULL;
-  gchar *error_message = NULL;
-
-  object = UL_LOGICAL_VOLUME_OBJECT (g_dbus_interface_dup_object (G_DBUS_INTERFACE (volume)));
-  g_return_val_if_fail (object != NULL, FALSE);
+  gchar *full_name = NULL;
+  UlJob *job = NULL;
 
   daemon = ul_daemon_get ();
 
-  if (!ul_daemon_get_caller_uid_sync (daemon,
-                                      invocation,
-                                      NULL /* GCancellable */,
-                                      &caller_uid,
-                                      &caller_gid,
-                                      NULL,
-                                      &error))
-    {
-      g_dbus_method_invocation_return_gerror (invocation, error);
-      g_error_free (error);
-      goto out;
-    }
+  group = ul_logical_volume_get_volume_group (self);
+  full_name = g_strdup_printf ("%s/%s", ul_volume_group_get_name (group),
+                               ul_logical_volume_get_name (self));
 
-  message = N_("Authentication is required to deactivate a logical volume");
-  action_id = "com.redhat.lvm2.manage-lvm";
-  if (!ul_daemon_check_authorization_sync (daemon,
-                                           LVM_OBJECT (object),
-                                           action_id,
-                                           options,
-                                           message,
-                                           invocation))
-    goto out;
+  job = ul_daemon_launch_spawned_job (daemon, self,
+                                      "lvm-lvol-deactivate",
+                                      ul_invocation_get_caller_uid (invocation),
+                                      NULL, /* GCancellable */
+                                      0,    /* uid_t run_as_uid */
+                                      0,    /* uid_t run_as_euid */
+                                      NULL,  /* input_string */
+                                      "lvchange", full_name, "-a", "n", NULL);
 
-  group_object = ul_logical_volume_object_get_volume_group (object);
-  escaped_group_name = ul_util_escape_and_quote (ul_volume_group_object_get_name (group_object));
-  escaped_name = ul_util_escape_and_quote (ul_logical_volume_object_get_name (object));
+  g_signal_connect_data (job, "completed", G_CALLBACK (on_deactivate_complete),
+                         g_object_ref (invocation), (GClosureNotify)g_object_unref, 0);
 
-  if (!ul_daemon_launch_spawned_job_sync (daemon,
-                                          LVM_OBJECT (object),
-                                          "lvm-lvol-deactivate", caller_uid,
-                                          NULL, /* GCancellable */
-                                          0,    /* uid_t run_as_uid */
-                                          0,    /* uid_t run_as_euid */
-                                          NULL, /* gint *out_status */
-                                          &error_message,
-                                          NULL,  /* input_string */
-                                          "lvchange %s/%s -a n",
-                                          escaped_group_name,
-                                          escaped_name))
-    {
-      g_dbus_method_invocation_return_error (invocation,
-                                             UDISKS_ERROR,
-                                             UDISKS_ERROR_FAILED,
-                                             "Error deleting logical volume: %s",
-                                             error_message);
-      goto out;
-    }
-
-  lvm_logical_volume_complete_deactivate (volume, invocation);
-
- out:
-  g_free (error_message);
-  g_free (escaped_name);
-  g_free (escaped_group_name);
-  g_clear_object (&object);
+  g_free (full_name);
   return TRUE;
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
+
+static void
+on_snapshot_logical_volume (UlDaemon *daemon,
+                            UlLogicalVolume *volume,
+                            gpointer user_data)
+{
+  CompleteClosure *complete = user_data;
+
+  if (g_str_equal (ul_logical_volume_get_name (volume), complete->wait_name) &&
+      ul_logical_volume_get_volume_group (volume) == UL_VOLUME_GROUP (complete->wait_thing))
+    {
+      lvm_logical_volume_complete_rename (NULL, complete->invocation,
+                                          ul_logical_volume_get_object_path (volume));
+      g_signal_handler_disconnect (daemon, complete->wait_sig);
+    }
+}
+
+static void
+on_snapshot_complete (UDisksJob *job,
+                      gboolean success,
+                      gchar *message,
+                      gpointer user_data)
+{
+  CompleteClosure *complete = user_data;
+
+  if (success)
+    return;
+
+  g_dbus_method_invocation_return_error (complete->invocation, UDISKS_ERROR,
+                                         UDISKS_ERROR_FAILED, "Error creating snapshot: %s", message);
+  g_signal_handler_disconnect (ul_daemon_get (), complete->wait_sig);
+}
 
 static gboolean
 handle_create_snapshot (LvmLogicalVolume *volume,
@@ -734,106 +744,58 @@ handle_create_snapshot (LvmLogicalVolume *volume,
                         guint64 size,
                         GVariant *options)
 {
-  GError *error = NULL;
-  UlLogicalVolumeObject *object = NULL;
+  UlLogicalVolume *self = UL_LOGICAL_VOLUME (volume);
+  UlVolumeGroup *group;
   UlDaemon *daemon;
-  const gchar *action_id;
-  const gchar *message;
-  uid_t caller_uid;
-  gid_t caller_gid;
-  UlVolumeGroupObject *group_object;
   gchar *encoded_volume_name = NULL;
-  gchar *escaped_volume_name = NULL;
-  gchar *escaped_group_name = NULL;
-  gchar *escaped_origin_name = NULL;
-  GString *cmd = NULL;
-  gchar *error_message = NULL;
-  const gchar *lv_objpath = NULL;
-
-  object = UL_LOGICAL_VOLUME_OBJECT (g_dbus_interface_dup_object (G_DBUS_INTERFACE (volume)));
-  g_return_val_if_fail (object != NULL, FALSE);
+  CompleteClosure *complete;
+  UlJob *job;
+  GPtrArray *args;
 
   daemon = ul_daemon_get ();
 
-  if (!ul_daemon_get_caller_uid_sync (daemon,
-                                      invocation,
-                                      NULL /* GCancellable */,
-                                      &caller_uid,
-                                      &caller_gid,
-                                      NULL,
-                                      &error))
-    {
-      g_dbus_method_invocation_return_gerror (invocation, error);
-      g_error_free (error);
-      goto out;
-    }
-
-  message = N_("Authentication is required to create a snapshot of a logical volume");
-  action_id = "com.redhat.lvm2.manage-lvm";
-  if (!ul_daemon_check_authorization_sync (daemon,
-                                           LVM_OBJECT (object),
-                                           action_id,
-                                           options,
-                                           message,
-                                           invocation))
-    goto out;
-
+  group = ul_logical_volume_get_volume_group (self);
   encoded_volume_name = ul_util_encode_lvm_name (name, TRUE);
-  escaped_volume_name = ul_util_escape_and_quote (encoded_volume_name);
-  group_object = ul_logical_volume_object_get_volume_group (object);
-  escaped_group_name = ul_util_escape_and_quote (ul_volume_group_object_get_name (group_object));
-  escaped_origin_name = ul_util_escape_and_quote (ul_logical_volume_object_get_name (object));
 
-  cmd = g_string_new ("lvcreate");
-  g_string_append_printf (cmd, " -s %s/%s -n %s",
-                          escaped_group_name, escaped_origin_name, escaped_volume_name);
+  args = g_ptr_array_new_with_free_func (g_free);
+  g_ptr_array_add (args, g_strdup ("lvcreate"));
+  g_ptr_array_add (args, g_strdup ("-s"));
+  g_ptr_array_add (args, g_strdup_printf ("%s/%s", ul_volume_group_get_name (group),
+                                          ul_logical_volume_get_name (self)));
+  g_ptr_array_add (args, g_strdup ("-n"));
+  g_ptr_array_add (args, g_strdup (encoded_volume_name));
 
   if (size > 0)
     {
       size -= size % 512;
-      g_string_append_printf (cmd, " -L %" G_GUINT64_FORMAT "b", size);
+      g_ptr_array_add (args, g_strdup_printf (" -L%" G_GUINT64_FORMAT "b", size));
     }
 
-  if (!ul_daemon_launch_spawned_job_sync (daemon,
-                                          LVM_OBJECT (object),
-                                          "lvm-lvol-snapshot", caller_uid,
-                                          NULL, /* GCancellable */
-                                          0,    /* uid_t run_as_uid */
-                                          0,    /* uid_t run_as_euid */
-                                          NULL, /* gint *out_status */
-                                          &error_message,
-                                          NULL,  /* input_string */
-                                          "%s", cmd->str))
-    {
-      g_dbus_method_invocation_return_error (invocation,
-                                             UDISKS_ERROR,
-                                             UDISKS_ERROR_FAILED,
-                                             "Error creating snapshot: %s",
-                                             error_message);
-      goto out;
-    }
+  g_ptr_array_add (args, NULL);
+  job = ul_daemon_launch_spawned_jobv (daemon, self,
+                                       "lvm-lvol-snapshot",
+                                       ul_invocation_get_caller_uid (invocation),
+                                       NULL, /* GCancellable */
+                                       0,    /* uid_t run_as_uid */
+                                       0,    /* uid_t run_as_euid */
+                                       NULL,  /* input_string */
+                                       (const gchar **)args->pdata);
 
-  lv_objpath = wait_for_logical_volume_path (group_object, encoded_volume_name, &error);
-  if (lv_objpath == NULL)
-    {
-      g_prefix_error (&error,
-                     "Error waiting for logical volume object for %s",
-                      name);
-      g_dbus_method_invocation_take_error (invocation, error);
-      goto out;
-    }
+  complete = g_new0 (CompleteClosure, 1);
+  complete->wait_name = encoded_volume_name;
+  complete->wait_thing = g_object_ref (group);
+  complete->invocation = g_object_ref (invocation);
 
-  lvm_logical_volume_complete_create_snapshot (volume, invocation, lv_objpath);
+  /* Wait for the job to finish */
+  g_signal_connect (job, "completed", G_CALLBACK (on_snapshot_complete), complete);
 
- out:
-  g_free (error_message);
-  g_free (encoded_volume_name);
-  g_free (escaped_volume_name);
-  g_free (escaped_origin_name);
-  g_free (escaped_group_name);
-  if (cmd)
-    g_string_free (cmd, TRUE);
-  g_clear_object (&object);
+  /* Wait for the object to appear */
+  complete->wait_sig = g_signal_connect_data (daemon,
+                                              "published::UlLogicalVolume",
+                                              G_CALLBACK (on_snapshot_logical_volume),
+                                              complete, complete_closure_free, 0);
+
+  g_ptr_array_free (args, TRUE);
   return TRUE;
 }
 
@@ -848,4 +810,38 @@ logical_volume_iface_init (LvmLogicalVolumeIface *iface)
   iface->handle_activate = handle_activate;
   iface->handle_deactivate = handle_deactivate;
   iface->handle_create_snapshot = handle_create_snapshot;
+}
+
+const gchar *
+ul_logical_volume_get_name (UlLogicalVolume *self)
+{
+  g_return_val_if_fail (UL_IS_LOGICAL_VOLUME (self), NULL);
+  return self->name;
+}
+
+const gchar *
+ul_logical_volume_get_object_path (UlLogicalVolume *self)
+{
+  g_return_val_if_fail (UL_IS_LOGICAL_VOLUME (self), NULL);
+  return g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (self));
+}
+
+UlVolumeGroup *
+ul_logical_volume_get_volume_group (UlLogicalVolume *self)
+{
+  g_return_val_if_fail (UL_IS_LOGICAL_VOLUME (self), NULL);
+  return self->volume_group;
+}
+
+void
+ul_logical_volume_set_volume_group (UlLogicalVolume *self,
+                                    UlVolumeGroup *group)
+{
+  g_return_if_fail (UL_IS_LOGICAL_VOLUME (self));
+
+  g_clear_object (&self->volume_group);
+  if (group != NULL)
+    self->volume_group = g_object_ref (group);
+  g_object_notify (G_OBJECT (self), "group");
+  g_object_notify (G_OBJECT ( self), "volume-group");
 }

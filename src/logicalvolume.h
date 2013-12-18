@@ -22,7 +22,7 @@
 #ifndef __UL_LOGICAL_VOLUME_H__
 #define __UL_LOGICAL_VOLUME_H__
 
-#include "volumegroupobject.h"
+#include "volumegroup.h"
 
 G_BEGIN_DECLS
 
@@ -32,14 +32,24 @@ G_BEGIN_DECLS
 
 typedef struct _UlLogicalVolume UlLogicalVolume;
 
-GType                ul_logical_volume_get_type (void) G_GNUC_CONST;
+GType                ul_logical_volume_get_type         (void) G_GNUC_CONST;
 
-UlLogicalVolume *    ul_logical_volume_new      (void);
+UlLogicalVolume *    ul_logical_volume_new              (UlVolumeGroup *group,
+                                                         const gchar *name);
 
-void                 ul_logical_volume_update   (UlLogicalVolume *self,
-                                                 UlVolumeGroupObject *group_object,
-                                                 GVariant *info,
-                                                 gboolean *needs_polling_ret);
+const gchar *        ul_logical_volume_get_name         (UlLogicalVolume *self);
+
+const gchar *        ul_logical_volume_get_object_path  (UlLogicalVolume *self);
+
+UlVolumeGroup *      ul_logical_volume_get_volume_group (UlLogicalVolume *self);
+
+void                 ul_logical_volume_set_volume_group (UlLogicalVolume *self,
+                                                         UlVolumeGroup *group);
+
+void                 ul_logical_volume_update           (UlLogicalVolume *self,
+                                                         UlVolumeGroup *group,
+                                                         GVariant *info,
+                                                         gboolean *needs_polling_ret);
 
 G_END_DECLS
 

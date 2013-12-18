@@ -136,7 +136,6 @@ test_add_remove (Test *test,
 {
   gchar *block_path = NULL;
   gchar *losetup_out;
-  gchar *loops;
   gchar *device;
   gchar *name;
   gint i;
@@ -144,14 +143,11 @@ test_add_remove (Test *test,
   g_signal_connect (test->objman, "object-added",
                     G_CALLBACK (on_block_path_copy), &block_path);
 
-  /* Figure out all the loop device names */
-  testing_target_execute (&loops, "losetup", "-la", "--raw", "--noheadings", NULL);
-
   /* Find one that isn't in use */
-  for (i = 0; i < 64; i++)
+  for (i = 0; i < 512; i++)
     {
       device = g_strdup_printf ("/dev/loop%d", i);
-      if (!strstr (loops, device))
+      if (!g_file_test (device, G_FILE_TEST_EXISTS))
         break;
       g_free (device);
       device = NULL;
