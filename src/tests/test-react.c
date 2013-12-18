@@ -84,7 +84,7 @@ setup_target (Test *test,
   if (testing_target_name)
     {
       test->daemon = testing_target_launch ("*Acquired*on the system message bus*",
-                                            BUILDDIR "/src/udisks-lvm",
+                                            BUILDDIR "/src/udisksd-lvm",
                                             "--resource-dir=" BUILDDIR "/src",
                                             "--replace", "--debug",
                                             NULL);

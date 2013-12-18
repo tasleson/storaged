@@ -47,6 +47,7 @@ po/udisks-lvm.pot
 src/com.redhat.lvm2.*
 src/udisks-lvm
 src/udisks-lvm-helper
+src/udisksd-lvm
 
 src/tests/test-*
 !src/tests/test-*.[ch]

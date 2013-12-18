@@ -4,7 +4,7 @@
 [<!ENTITY version SYSTEM "../version.xml">]>
 <refentry id="udisks.8">
   <refentryinfo>
-    <title>udisks-lvm</title>
+    <title>udisksd-lvm</title>
     <date>December 2013</date>
     <productname>udisks</productname>
   </refentryinfo>
@@ -18,8 +18,8 @@
   </refmeta>
 
   <refnamediv>
-    <refname>udisks-lvm</refname>
-    <refpurpose>Disk Manager</refpurpose>
+    <refname>udisksd-lvm</refname>
+    <refpurpose>LVM Disk Manager</refpurpose>
   </refnamediv>
 
   <refsect1><title>DESCRIPTION</title>

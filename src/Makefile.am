@@ -80,18 +80,18 @@ libudisks_lvm_la_LIBADD = \
 # ----------------------------------------------------------------------------------------------------
 
 udisksdprivdir = $(prefix)/lib/udisks2
-udisksdpriv_PROGRAMS = udisks-lvm udisks-lvm-helper
+udisksdpriv_PROGRAMS = udisksd-lvm udisks-lvm-helper
 
-udisks_lvm_SOURCES = \
+udisksd_lvm_SOURCES = \
 	main.c \
 	$(NULL)
 
-udisks_lvm_CFLAGS = \
+udisksd_lvm_CFLAGS = \
 	-DG_LOG_DOMAIN=\"udisks-lvm\" \
 	$(UDISKS_CFLAGS) \
 	$(NULL)
 
-udisks_lvm_LDADD = \
+udisksd_lvm_LDADD = \
 	$(GLIB_LIBS) \
 	$(GIO_LIBS) \
 	libudisks-lvm.la \
