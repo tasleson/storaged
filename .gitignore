@@ -51,6 +51,8 @@ src/udisksd-lvm
 
 src/tests/test-*
 !src/tests/test-*.[ch]
+src/tests/frob-*
+!src/tests/frob-*.[ch]
 
 po/.intltool*
 

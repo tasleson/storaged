@@ -34,6 +34,7 @@ libtesting_la_SOURCES = \
 	$(NULL)
 
 TEST_PROGS = \
+	test-jobs \
 	test-block \
 	test-react \
 	test-methods \
@@ -45,4 +46,13 @@ TESTS = \
 
 noinst_PROGRAMS = \
 	$(TEST_PROGS) \
+	frob-helper \
+	$(NULL)
+
+test_jobs_LDADD = \
+	$(builddir)/../libudisks-lvm.la \
+	$(NULL)
+
+test_jobs_CFLAGS = \
+	$(UDISKS_CFLAGS) \
 	$(NULL)
