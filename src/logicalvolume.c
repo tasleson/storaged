@@ -267,7 +267,6 @@ ul_logical_volume_update (UlLogicalVolume *self,
   if (g_variant_lookup (info, "name", "&s", &str))
     {
       gchar *decoded = ul_util_decode_lvm_name (str);
-      lvm_logical_volume_set_name (iface, str);
       lvm_logical_volume_set_display_name (iface, decoded);
       g_free (decoded);
     }

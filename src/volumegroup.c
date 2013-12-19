@@ -234,7 +234,6 @@ volume_group_update_props (UlVolumeGroup *self,
   if (g_variant_lookup (info, "name", "&s", &str))
     {
       gchar *decoded = ul_util_decode_lvm_name (str);
-      lvm_volume_group_set_name (iface, str);
       lvm_volume_group_set_display_name (iface, decoded);
       g_free (decoded);
     }

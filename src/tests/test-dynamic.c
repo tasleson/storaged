@@ -30,8 +30,9 @@ typedef struct {
   struct {
     gchar *device;
     gchar *object_path;
-  } blocks[3];
+  } blocks[2];
 
+  gchar *vgname;
   GDBusProxy *volume_group;
 } Test;
 
@@ -44,6 +45,7 @@ setup_target (Test *test,
   guint i;
 
   testing_target_setup (&test->bus, &test->objman, &test->daemon);
+  test->vgname = testing_target_vgname ();
 
   /* Create three raw disk files which we'll use */
   for (i = 0; i < G_N_ELEMENTS (test->blocks); i++)
@@ -70,65 +72,13 @@ teardown_target (Test *test,
   guint i;
 
   testing_target_teardown (&test->bus, &test->objman, &test->daemon);
+  g_free (test->vgname);
 
   for (i = 0; i < G_N_ELEMENTS (test->blocks); i++)
     {
       g_free (test->blocks[i].device);
       g_free (test->blocks[i].object_path);
     }
-}
-
-static void
-ret_proxy_if_interface_matches (GDBusProxy *proxy,
-                                const gchar *want_interface,
-                                GDBusProxy **ret)
-{
-  if (g_str_equal (g_dbus_proxy_get_interface_name (proxy), want_interface))
-    {
-      g_assert (*ret == NULL);
-      *ret = g_object_ref (proxy);
-    }
-}
-
-static void
-on_volume_group_added (GDBusObjectManager *objman,
-                       GDBusObject *make_it_stop,
-                       GDBusInterface *interface,
-                       gpointer user_data)
-{
-  ret_proxy_if_interface_matches (G_DBUS_PROXY (interface),
-                                  "com.redhat.lvm2.VolumeGroup", user_data);
-}
-
-static void
-on_logical_volume_added (GDBusObjectManager *objman,
-                         GDBusObject *make_it_stop,
-                         GDBusInterface *interface,
-                         gpointer user_data)
-{
-  ret_proxy_if_interface_matches (G_DBUS_PROXY (interface),
-                                  "com.redhat.lvm2.LogicalVolume", user_data);
-}
-
-static void
-on_logical_volume_block_added (GDBusObjectManager *objman,
-                               GDBusObject *make_it_stop,
-                               GDBusInterface *interface,
-                               gpointer user_data)
-{
-  ret_proxy_if_interface_matches (G_DBUS_PROXY (interface),
-                                  "com.redhat.lvm2.LogicalVolumeBlock", user_data);
-}
-
-static void
-on_proxy_removed (GDBusObjectManager *objman,
-                  GDBusObject *make_it_stop,
-                  GDBusInterface *interface,
-                  gpointer user_data)
-{
-  GDBusProxy **proxy = user_data;
-  if (*proxy == G_DBUS_PROXY (interface))
-    g_clear_object (proxy);
 }
 
 static GDBusProxy *
@@ -147,18 +97,15 @@ static void
 setup_vgcreate (Test *test,
                 gconstpointer data)
 {
-  gulong sig;
-
   setup_target (test, data);
 
-  sig = g_signal_connect (test->objman, "interface-added",
-                          G_CALLBACK (on_volume_group_added), &test->volume_group);
+  testing_want_added (test->objman, "com.redhat.lvm2.VolumeGroup",
+                      test->vgname, &test->volume_group);
 
-  testing_target_execute (NULL, "vgcreate", "test-udisk-lvm",
+  testing_target_execute (NULL, "vgcreate", test->vgname,
                           test->blocks[0].device, test->blocks[1].device, NULL);
 
   testing_wait_until (test->volume_group != NULL);
-  g_signal_handler_disconnect (test->objman, sig);
 }
 
 static void
@@ -166,7 +113,7 @@ teardown_vgremove (Test *test,
                    gconstpointer data)
 {
   g_clear_object (&test->volume_group);
-  testing_target_execute (NULL, "vgremove", "-f", "test-udisk-lvm", NULL);
+  testing_target_execute (NULL, "vgremove", "-f", test->vgname, NULL);
   teardown_target (test, data);
 }
 
@@ -177,33 +124,30 @@ test_vgcreate_remove (Test *test,
   GDBusProxy *volume_group = NULL;
   GDBusProxy *block;
 
-  g_signal_connect (test->objman, "interface-added",
-                    G_CALLBACK (on_volume_group_added), &volume_group);
+  testing_want_added (test->objman, "com.redhat.lvm2.VolumeGroup",
+                      test->vgname, &volume_group);
 
-  testing_target_execute (NULL, "vgcreate", "test-udisk-lvm",
+  testing_target_execute (NULL, "vgcreate", test->vgname,
                           test->blocks[0].device, test->blocks[1].device, NULL);
 
   testing_wait_until (volume_group != NULL);
 
   /* Found a new VolumeGroup exposed */
   g_assert_str_matches (g_dbus_proxy_get_object_path (volume_group), "/org/freedesktop/UDisks2/lvm/*");
-  g_assert_cmpstr (testing_proxy_string (volume_group, "Name"), ==, "test-udisk-lvm");
+  g_assert_cmpstr (testing_proxy_string (volume_group, "Name"), ==, test->vgname);
 
   /* At this point these two guys should each be a PhysicalVolumeBlock */
-  while ((block = lookup_interface (test, test->blocks[0].object_path, "com.redhat.lvm2.PhysicalVolumeBlock")) == NULL)
-    g_main_context_iteration (NULL, TRUE);
+  testing_wait_until ((block = lookup_interface (test, test->blocks[0].object_path, "com.redhat.lvm2.PhysicalVolumeBlock")) != NULL);
   g_assert_cmpstr (testing_proxy_string (block, "VolumeGroup"), ==, g_dbus_proxy_get_object_path (volume_group));
   g_object_unref (block);
 
-  while ((block = lookup_interface (test, test->blocks[1].object_path, "com.redhat.lvm2.PhysicalVolumeBlock")) == NULL)
-    g_main_context_iteration (NULL, TRUE);
+  testing_wait_until ((block = lookup_interface (test, test->blocks[1].object_path, "com.redhat.lvm2.PhysicalVolumeBlock")) != NULL);
   g_assert_cmpstr (testing_proxy_string (block, "VolumeGroup"), ==, g_dbus_proxy_get_object_path (volume_group));
   g_object_unref (block);
 
-  g_signal_connect (test->objman, "interface-removed",
-                    G_CALLBACK (on_proxy_removed), &volume_group);
+  testing_want_removed (test->objman, &volume_group);
 
-  testing_target_execute (NULL, "vgremove", "-f", "test-udisk-lvm", NULL);
+  testing_target_execute (NULL, "vgremove", "-f", test->vgname, NULL);
 
   /* The object should disappear */
   testing_wait_until (volume_group == NULL);
@@ -213,21 +157,19 @@ static void
 test_lvcreate_change_remove (Test *test,
                              gconstpointer data)
 {
-  GDBusProxy *proxy = NULL;
-  GDBusProxy *logical_volume1;
-  GDBusProxy *logical_volume2;
+  GDBusProxy *logical_volume1 = NULL;
+  GDBusProxy *logical_volume2 = NULL;
   const gchar *volume_group_path;
   GDBusProxy *block = NULL;
+  gchar *full_name;
 
-  g_signal_connect (test->objman, "interface-added",
-                    G_CALLBACK (on_logical_volume_added), &proxy);
+  testing_want_added (test->objman, "com.redhat.lvm2.LogicalVolume",
+                      "one", &logical_volume1);
+  testing_want_added (test->objman, "com.redhat.lvm2.LogicalVolume",
+                      "two", &logical_volume2);
 
-  testing_target_execute (NULL, "lvcreate", "test-udisk-lvm", "--name", "one",
+  testing_target_execute (NULL, "lvcreate", test->vgname, "--name", "one",
                           "--size", "20m", "--activate", "n", "--zero", "n", NULL);
-
-  testing_wait_until (proxy != NULL);
-  logical_volume1 = proxy;
-  proxy = NULL;
 
   /*
    * TODO: We get the following here. Does LVM not support enumerating (by udisks-lvm)
@@ -241,12 +183,10 @@ test_lvcreate_change_remove (Test *test,
    */
   g_usleep (G_USEC_PER_SEC / 2);
 
-  testing_target_execute (NULL, "lvcreate", "test-udisk-lvm", "--name", "two",
+  testing_target_execute (NULL, "lvcreate", test->vgname, "--name", "two",
                           "--size", "20m", "--activate", "n", "--zero", "n", NULL);
 
-  testing_wait_until (proxy != NULL);
-  logical_volume2 = proxy;
-  proxy = NULL;
+  testing_wait_until (logical_volume1 != NULL && logical_volume2 != NULL);
 
   /* Check that they're in the volume group, ... both by path */
   volume_group_path = g_dbus_proxy_get_object_path (test->volume_group);
@@ -262,19 +202,22 @@ test_lvcreate_change_remove (Test *test,
   g_assert_cmpstr (testing_proxy_string (logical_volume2, "Name"), ==, "two");
 
   /* Activate one of them, and a new block should appear */
-  g_signal_connect (test->objman, "interface-added",
-                    G_CALLBACK (on_logical_volume_block_added), &block);
-  testing_target_execute (NULL, "lvchange", "test-udisk-lvm/one", "--activate", "y", NULL);
+  testing_want_added (test->objman, "com.redhat.lvm2.LogicalVolumeBlock", NULL, &block);
+
+  full_name = g_strdup_printf ("%s/one", test->vgname);
+  testing_target_execute (NULL, "lvchange", full_name, "--activate", "y", NULL);
+  g_free (full_name);
   testing_wait_until (block != NULL);
 
   /* The new block should have the right property pointing back to lv */
   g_assert_cmpstr (testing_proxy_string (block, "LogicalVolume"), ==, g_dbus_proxy_get_object_path (logical_volume1));
 
   /* Remove the other logical volume, and it should disappear */
-  g_signal_connect (test->objman, "interface-removed",
-                    G_CALLBACK (on_proxy_removed), &logical_volume2);
+  testing_want_removed (test->objman, &logical_volume2);
 
-  testing_target_execute (NULL, "lvremove", "test-udisk-lvm/two", NULL);
+  full_name = g_strdup_printf ("%s/two", test->vgname);
+  testing_target_execute (NULL, "lvremove", full_name, NULL);
+  g_free (full_name);
   testing_wait_until (logical_volume2 == NULL);
 
   g_object_unref (logical_volume1);
@@ -292,10 +235,9 @@ test_vgreduce (Test *test,
   volume_group_path = g_dbus_proxy_get_object_path (test->volume_group);
   g_assert_cmpstr (testing_proxy_string (block, "VolumeGroup"), ==, volume_group_path);
 
-  g_signal_connect (test->objman, "interface-removed",
-                    G_CALLBACK (on_proxy_removed), &block);
+  testing_want_removed (test->objman, &block);
 
-  testing_target_execute (NULL, "vgreduce", "test-udisk-lvm", test->blocks[0].device, NULL);
+  testing_target_execute (NULL, "vgreduce", test->vgname, test->blocks[0].device, NULL);
 
   testing_wait_until (block == NULL);
 }

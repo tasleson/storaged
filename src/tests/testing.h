@@ -51,6 +51,8 @@ void                 testing_target_teardown        (GDBusConnection **connectio
                                                      GDBusObjectManager **objman,
                                                      gpointer *daemon);
 
+gchar *              testing_target_vgname          (void);
+
 #define TESTING_TYPE_IO_STREAM    (testing_io_stream_get_type ())
 #define TESTING_IO_STREAM(o)      (G_TYPE_CHECK_INSTANCE_CAST ((o), TESTING_TYPE_IO_STREAM, TestingIOStream))
 #define TESTING_IS_IO_STREAM(o)   (G_TYPE_CHECK_INSTANCE_TYPE ((o), TESTING_TYPE_IO_STREAM))
@@ -122,5 +124,13 @@ gboolean         testing_callback_set_flag        (gpointer user_data);
 
 const gchar *    testing_proxy_string             (GDBusProxy *proxy,
                                                    const gchar *property);
+
+void             testing_want_added               (GDBusObjectManager *objman,
+                                                   const gchar *interface,
+                                                   const gchar *name,
+                                                   GDBusProxy **location);
+
+void             testing_want_removed             (GDBusObjectManager *objman,
+                                                   GDBusProxy **proxy);
 
 #endif /* __TESTING_IO_STREAM_H__ */

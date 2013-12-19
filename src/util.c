@@ -32,6 +32,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <udisks/udisks.h>
+
 /**
  * udisks_safe_append_to_object_path:
  * @str: A #GString to append to.

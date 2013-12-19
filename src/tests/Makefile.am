@@ -17,11 +17,13 @@ AM_CPPFLAGS = \
 	$(GLIB_CFLAGS) 						\
 	$(GIO_CFLAGS)						\
 	$(WARN_CFLAGS)						\
+	$(UDISKS_CFLAGS) 					\
 	$(NULL)
 
 LDADD = \
 	$(GLIB_LIBS) \
 	$(GIO_LIBS) \
+	$(UDISKS_LIBS) \
 	libtesting.la \
 	$(NULL)
 
@@ -31,6 +33,7 @@ noinst_LTLIBRARIES = libtesting.la
 
 libtesting_la_SOURCES = \
 	testing.h testing.c \
+	../util.h ../util.c \
 	$(NULL)
 
 TEST_PROGS = \
@@ -51,8 +54,4 @@ noinst_PROGRAMS = \
 
 test_jobs_LDADD = \
 	$(builddir)/../libudisks-lvm.la \
-	$(NULL)
-
-test_jobs_CFLAGS = \
-	$(UDISKS_CFLAGS) \
 	$(NULL)

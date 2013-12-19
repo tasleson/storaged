@@ -21,7 +21,7 @@
 #ifndef __UDISKS_DAEMON_UTIL_H__
 #define __UDISKS_DAEMON_UTIL_H__
 
-#include "daemon.h"
+#include <glib.h>
 
 G_BEGIN_DECLS
 

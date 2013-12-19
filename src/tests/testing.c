@@ -22,6 +22,8 @@
 
 #include "testing.h"
 
+#include "util.h"
+
 #include <glib/gstdio.h>
 #include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
@@ -656,10 +658,116 @@ testing_target_setup (GDBusConnection **connection,
   /* Groan */
   g_signal_connect (*objman, "object-added", G_CALLBACK (unbreak_object_manager_added), NULL);
   g_signal_connect (*objman, "object-removed", G_CALLBACK (unbreak_object_manager_removed), NULL);
+}
 
-  /* Free up any unused devices */
-  testing_target_execute (NULL, "losetup", "-D", NULL);
-  testing_target_execute (NULL, "pvscan", "--cache", NULL);
+gchar *
+testing_target_vgname (void)
+{
+  gchar *vgdisplay;
+  gchar *vgname;
+  gchar *encoded;
+  gint i;
+
+  /*
+   * Free up any unused devices, and make sure any remaining
+   * vgs (or stragglers) get listed
+   */
+
+  testing_target_execute (&vgdisplay, "/bin/sh", "-c",
+                          "losetup -D; pvscan --cache; vgdisplay --short; ls /dev",
+                          NULL);
+
+  /* Choose a volume group name that doesn't exist in listed */
+  for (i = 0; i < 512; i++)
+    {
+      vgname = g_strdup_printf ("test-udisks-%d", i);
+      encoded = ul_util_encode_lvm_name (vgname, FALSE);
+      if (!strstr (vgdisplay, vgname) && !strstr (vgdisplay, encoded))
+        break;
+      g_free (encoded);
+      encoded = NULL;
+      g_free (vgname);
+      vgname = NULL;
+    }
+
+  g_free (encoded);
+  g_free (vgdisplay);
+  g_assert (vgname != NULL);
+
+  return vgname;
+}
+
+typedef struct {
+  const gchar *interface;
+  const gchar *name;
+  GDBusProxy **location;
+  gulong sig;
+} WantProxy;
+
+static void
+on_proxy_added (GDBusObjectManager *objman,
+                GDBusObject *make_it_stop,
+                GDBusInterface *interface,
+                gpointer user_data)
+{
+  WantProxy *want = user_data;
+  GDBusProxy *proxy = G_DBUS_PROXY (interface);
+
+  if (g_str_equal (g_dbus_proxy_get_interface_name (proxy), want->interface) &&
+      (!want->name || g_strcmp0 (testing_proxy_string (proxy, "Name"), want->name) == 0))
+    {
+      g_assert (*want->location == NULL);
+      *want->location = g_object_ref (proxy);
+      g_signal_handler_disconnect (objman, want->sig);
+      g_free (want);
+    }
+}
+
+void
+testing_want_added (GDBusObjectManager *objman,
+                    const gchar *interface,
+                    const gchar *name,
+                    GDBusProxy **location)
+{
+  WantProxy *want;
+
+  g_assert (location != NULL);
+  g_assert (*location == NULL);
+
+  want = g_new (WantProxy, 1);
+  want->interface = interface;
+  want->name = name;
+  want->location = location;
+  want->sig = g_signal_connect (objman, "interface-added", G_CALLBACK (on_proxy_added), want);
+}
+
+static void
+on_proxy_removed (GDBusObjectManager *objman,
+                  GDBusObject *make_it_stop,
+                  GDBusInterface *interface,
+                  gpointer user_data)
+{
+  WantProxy *want = user_data;
+  if (*want->location == G_DBUS_PROXY (interface))
+    {
+      g_clear_object (want->location);
+      g_signal_handler_disconnect (objman, want->sig);
+      g_free (want);
+    }
+}
+
+void
+testing_want_removed (GDBusObjectManager *objman,
+                      GDBusProxy **proxy)
+{
+  WantProxy *want;
+
+  g_assert (proxy != NULL);
+  g_assert (G_IS_DBUS_PROXY (*proxy));
+
+  want = g_new (WantProxy, 1);
+  want->location = proxy;
+  want->sig = g_signal_connect (objman, "interface-removed", G_CALLBACK (on_proxy_removed), want);
 }
 
 void
