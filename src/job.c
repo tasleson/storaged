@@ -245,19 +245,18 @@ ul_job_add_thing (UlJob *self,
 
   g_return_if_fail (UL_IS_JOB (self));
 
-  if (object_or_interface != NULL)
-  {
-    if (G_IS_DBUS_OBJECT (object_or_interface))
-      object_path = g_dbus_object_get_object_path (object_or_interface);
-    else if (G_IS_DBUS_INTERFACE_SKELETON (object_or_interface))
-      object_path = g_dbus_interface_skeleton_get_object_path (object_or_interface);
-    else
-      {
-        g_critical ("Invalid interface or object passed to job: %s",
-                    G_OBJECT_TYPE_NAME (object_or_interface));
-        return;
-      }
-  }
+  if (object_or_interface == NULL)
+    return;
+  else if (G_IS_DBUS_OBJECT (object_or_interface))
+    object_path = g_dbus_object_get_object_path (object_or_interface);
+  else if (G_IS_DBUS_INTERFACE_SKELETON (object_or_interface))
+    object_path = g_dbus_interface_skeleton_get_object_path (object_or_interface);
+  else
+    {
+      g_critical ("Invalid interface or object passed to job: %s",
+                  G_OBJECT_TYPE_NAME (object_or_interface));
+      return;
+    }
 
   paths = udisks_job_get_objects (UDISKS_JOB (self));
   for (n = 0; paths != NULL && paths[n] != NULL; n++)

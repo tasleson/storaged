@@ -886,6 +886,7 @@ ul_daemon_publish (UlDaemon *self,
   else
     {
       g_critical ("Unsupported object or interface type to publish: %s", G_OBJECT_TYPE_NAME (thing));
+      return;
     }
 
   if (uniquely)
