@@ -22,10 +22,12 @@
 
 #include "block.h"
 #include "daemon.h"
+#include "invocation.h"
 #include "job.h"
 #include "manager.h"
 #include "spawnedjob.h"
 #include "threadedjob.h"
+#include "util.h"
 #include "volumegroup.h"
 
 #include <glib/gi18n-lib.h>
@@ -45,6 +47,7 @@
 
 enum {
   PUBLISHED,
+  FINISHED,
   NUM_SIGNALS
 };
 
@@ -65,6 +68,13 @@ struct _UlDaemon
 {
   GObject parent_instance;
   GDBusConnection *connection;
+  gint name_owner_id;
+  GBusNameOwnerFlags name_flags;
+  gboolean name_owned;
+  guint num_clients;
+  guint num_jobs;
+  gboolean persist;
+
   GDBusObjectManagerServer *object_manager;
   UlManager *manager;
 
@@ -86,6 +96,8 @@ enum
   PROP_CONNECTION,
   PROP_OBJECT_MANAGER,
   PROP_RESOURCE_DIR,
+  PROP_REPLACE_NAME,
+  PROP_PERSIST,
 };
 
 G_DEFINE_TYPE (UlDaemon, ul_daemon, G_TYPE_OBJECT);
@@ -97,11 +109,15 @@ ul_daemon_finalize (GObject *object)
 
   default_daemon = NULL;
 
+  if (self->name_owner_id)
+    g_bus_unown_name (self->name_owner_id);
   g_clear_object (&self->authority);
   g_object_unref (self->object_manager);
   g_object_unref (self->connection);
   g_object_unref (self->manager);
   g_free (self->resource_dir);
+
+  ul_invocation_cleanup ();
 
   G_OBJECT_CLASS (ul_daemon_parent_class)->finalize (object);
 }
@@ -146,6 +162,14 @@ ul_daemon_set_property (GObject      *object,
       self->resource_dir = g_value_dup_string (value);
       break;
 
+    case PROP_REPLACE_NAME:
+      self->name_flags |= (g_value_get_boolean (value) ? G_BUS_NAME_OWNER_FLAGS_REPLACE : 0);
+      break;
+
+    case PROP_PERSIST:
+      self->persist = g_value_get_boolean (value);
+      break;
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -157,6 +181,78 @@ ul_daemon_init (UlDaemon *self)
 {
   g_assert (default_daemon == NULL);
   default_daemon = self;
+
+  self->name_flags = G_BUS_NAME_OWNER_FLAGS_ALLOW_REPLACEMENT;
+}
+
+static void
+maybe_finished (UlDaemon *self)
+{
+  if (!self->persist && !self->name_owned &&
+      self->num_clients == 0 && self->num_jobs == 0)
+    {
+      g_debug ("Daemon has finished");
+      g_signal_emit (self, signals[FINISHED], 0);
+    }
+}
+
+static void
+on_name_lost (GDBusConnection *connection,
+              const gchar *name,
+              gpointer user_data)
+{
+  UlDaemon *self = user_data;
+  g_message ("Lost (or failed to acquire) the name %s on the system message bus", name);
+  self->name_owned = FALSE;
+  maybe_finished (self);
+}
+
+static void
+on_name_acquired (GDBusConnection *connection,
+                  const gchar *bus_name,
+                  gpointer user_data)
+{
+  UlDaemon *self = user_data;
+  g_info ("Acquired the name %s on the system message bus", bus_name);
+  self->name_owned = TRUE;
+}
+
+static void
+on_client_appeared (const gchar *bus_name,
+                    gpointer user_data)
+{
+  UlDaemon *self = user_data;
+  g_debug ("Saw new client: %s", bus_name);
+  self->num_clients++;
+}
+
+static void
+on_client_disappeared (const gchar *bus_name,
+                       gpointer user_data)
+{
+  UlDaemon *self = user_data;
+
+  g_assert (self->num_clients > 0);
+  self->num_clients--;
+
+  if (self->num_clients > 0)
+    {
+      g_debug ("Client went away: %s", bus_name);
+    }
+  else
+    {
+      g_info ("Last client went away: %s", bus_name);
+
+      /* When last client, force release of name */
+      if (self->name_owner_id)
+        {
+          g_bus_unown_name (self->name_owner_id);
+          self->name_owner_id = 0;
+          self->name_owned = FALSE;
+        }
+    }
+
+  maybe_finished (self);
 }
 
 static void
@@ -167,6 +263,11 @@ ul_daemon_constructed (GObject *object)
   GError *error;
 
   G_OBJECT_CLASS (ul_daemon_parent_class)->constructed (object);
+
+  ul_invocation_initialize (self->connection,
+                            on_client_appeared,
+                            on_client_disappeared,
+                            self);
 
   error = NULL;
   self->authority = polkit_authority_get_sync (NULL, &error);
@@ -189,6 +290,14 @@ ul_daemon_constructed (GObject *object)
   g_dbus_object_skeleton_add_interface (skeleton, G_DBUS_INTERFACE_SKELETON (self->manager));
   g_dbus_object_manager_server_export (self->object_manager, skeleton);
   g_object_unref (skeleton);
+
+  self->name_owner_id = g_bus_own_name_on_connection (self->connection,
+                                                      "com.redhat.lvm2",
+                                                      self->name_flags,
+                                                      on_name_acquired,
+                                                      on_name_lost,
+                                                      self,
+                                                      NULL);
 }
 
 static void
@@ -241,12 +350,40 @@ ul_daemon_class_init (UlDaemonClass *klass)
                                                         G_PARAM_CONSTRUCT_ONLY |
                                                         G_PARAM_STATIC_STRINGS));
 
+  g_object_class_install_property (gobject_class,
+                                   PROP_REPLACE_NAME,
+                                   g_param_spec_boolean ("replace-name",
+                                                         "Replace Name",
+                                                         "Replace DBus service name",
+                                                         FALSE,
+                                                         G_PARAM_WRITABLE |
+                                                         G_PARAM_CONSTRUCT_ONLY |
+                                                         G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class,
+                                   PROP_PERSIST,
+                                   g_param_spec_boolean ("persist",
+                                                         "Persist",
+                                                         "Don't stop daemon automatically",
+                                                         FALSE,
+                                                         G_PARAM_WRITABLE |
+                                                         G_PARAM_CONSTRUCT_ONLY |
+                                                         G_PARAM_STATIC_STRINGS));
+
   signals[PUBLISHED] = g_signal_new ("published",
                                      UL_TYPE_DAEMON,
                                      G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
                                      0, NULL, NULL,
                                      g_cclosure_marshal_generic,
                                      G_TYPE_NONE, 1, G_TYPE_DBUS_OBJECT);
+
+  signals[FINISHED] = g_signal_new ("finished",
+                                     UL_TYPE_DAEMON,
+                                     G_SIGNAL_RUN_LAST,
+                                     0, NULL, NULL,
+                                     g_cclosure_marshal_generic,
+                                     G_TYPE_NONE, 0);
+
 }
 
 UlDaemon *
@@ -304,6 +441,10 @@ on_job_completed (UDisksJob *job,
    * below
    */
   g_object_unref (self);
+
+  g_assert (self->num_jobs > 0);
+  self->num_jobs--;
+  maybe_finished (self);
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
@@ -413,6 +554,8 @@ ul_daemon_launch_spawned_jobv (UlDaemon *self,
   udisks_job_set_started_by_uid (UDISKS_JOB (job), job_started_by_uid);
 
   g_dbus_object_manager_server_export (self->object_manager, G_DBUS_OBJECT_SKELETON (job_object));
+
+  self->num_jobs++;
   g_signal_connect_after (job,
                           "completed",
                           G_CALLBACK (on_job_completed),
@@ -485,6 +628,8 @@ ul_daemon_launch_threaded_job  (UlDaemon *daemon,
   udisks_job_set_started_by_uid (UDISKS_JOB (job), job_started_by_uid);
 
   g_dbus_object_manager_server_export (daemon->object_manager, G_DBUS_OBJECT_SKELETON (job_object));
+
+  daemon->num_jobs++;
   g_signal_connect_after (job,
                           "completed",
                           G_CALLBACK (on_job_completed),

@@ -34,8 +34,10 @@ enum {
 struct {
   GTypeClass *dbus_interface_skeleton_class;
   GObject * (* overridden_constructor) (GType, guint, GObjectConstructParam *);
-  GQuark data_quark;
-  const gchar *self_name;
+
+  UlClientFunc client_appeared;
+  UlClientFunc client_disappeared;
+  gpointer client_user_data;
 
   GMutex mutex;
   GCond wait_cond;
@@ -51,6 +53,8 @@ typedef struct {
   gint uid_state;
 
   /* Never change once configured */
+  guint watch;
+  gboolean callback;
   gchar *bus_name;
   PolkitSubject *subject;
 } InvocationClient;
@@ -62,6 +66,8 @@ invocation_client_unref (gpointer data)
   if (g_atomic_int_dec_and_test (&client->refs))
     {
       g_object_unref (client->subject);
+      if (client->watch)
+        g_bus_unwatch_name (client->watch);
       g_free (client->bus_name);
       g_free (client);
     }
@@ -165,6 +171,46 @@ on_get_connection_unix_user (GObject *source,
   g_free (bus_name);
 }
 
+static gboolean
+on_invoke_client_appeared (gpointer user_data)
+{
+  const gchar *bus_name = user_data;
+  if (inv.client_appeared)
+    (inv.client_appeared) (bus_name, inv.client_user_data);
+  return FALSE;
+}
+
+static gboolean
+on_invoke_client_disappeared (gpointer user_data)
+{
+  const gchar *bus_name = user_data;
+  if (inv.client_disappeared)
+    (inv.client_disappeared) (bus_name, inv.client_user_data);
+  return FALSE;
+}
+
+static void
+on_client_vanished (GDBusConnection *connection,
+                    const gchar *name,
+                    gpointer user_data)
+{
+  InvocationClient *client;
+
+  g_mutex_lock (&inv.mutex);
+  client = g_hash_table_lookup (inv.clients, name);
+  if (client)
+    g_hash_table_steal (inv.clients, name);
+  g_mutex_unlock (&inv.mutex);
+
+  if (client)
+    {
+      g_main_context_invoke_full (NULL, G_PRIORITY_DEFAULT,
+                                  on_invoke_client_disappeared,
+                                  g_strdup (name), g_free);
+      invocation_client_unref (client);
+    }
+}
+
 static void
 invocation_client_create (GDBusConnection *connection,
                           const gchar *bus_name)
@@ -200,6 +246,10 @@ invocation_client_create (GDBusConnection *connection,
   client->uid_peer = ~0;
   client->uid_state = UID_LOADING;
 
+  client->watch = g_bus_watch_name_on_connection (connection, bus_name,
+                                                  G_BUS_NAME_WATCHER_FLAGS_NONE,
+                                                  NULL, on_client_vanished, NULL, NULL);
+
   g_debug ("GetConnectionUnixUser('%s') ...", bus_name);
 
   /*
@@ -220,11 +270,23 @@ invocation_client_create (GDBusConnection *connection,
                           g_strdup (bus_name));
 
   g_mutex_lock (&inv.mutex);
-  if (g_hash_table_lookup (inv.clients, bus_name))
-    invocation_client_unref (client);
-  else
-    g_hash_table_replace (inv.clients, client->bus_name, client);
+  if (!g_hash_table_lookup (inv.clients, bus_name))
+    {
+      g_hash_table_replace (inv.clients, client->bus_name, client);
+      client = NULL;
+    }
   g_mutex_unlock (&inv.mutex);
+
+  if (client)
+    {
+      invocation_client_unref (client);
+    }
+  else
+    {
+      g_main_context_invoke_full (NULL, G_PRIORITY_DEFAULT,
+                                  on_invoke_client_appeared,
+                                  g_strdup (bus_name), g_free);
+    }
 }
 
 static GDBusMessage *
@@ -481,18 +543,23 @@ hook_dbus_interface_skeleton_constructor (GType type,
 }
 
 void
-ul_invocation_initialize (GDBusConnection *connection)
+ul_invocation_initialize (GDBusConnection *connection,
+                          UlClientFunc client_appeared,
+                          UlClientFunc client_disappeared,
+                          gpointer user_data)
 {
   GObjectClass *object_class;
   GError *error = NULL;
+
+  inv.client_appeared = client_appeared;
+  inv.client_disappeared = client_disappeared;
+  inv.client_user_data = user_data;
 
   inv.dbus_interface_skeleton_class = g_type_class_ref (G_TYPE_DBUS_INTERFACE_SKELETON);
 
   object_class = G_OBJECT_CLASS (inv.dbus_interface_skeleton_class);
   inv.overridden_constructor = object_class->constructor;
   object_class->constructor = hook_dbus_interface_skeleton_constructor;
-
-  inv.data_quark = g_quark_from_static_string ("ul-invocation-data");
 
   inv.clients = g_hash_table_new_full (g_str_hash, g_str_equal,
                                        NULL, invocation_client_unref);
@@ -510,6 +577,10 @@ ul_invocation_initialize (GDBusConnection *connection)
 void
 ul_invocation_cleanup (void)
 {
+  inv.client_appeared = NULL;
+  inv.client_disappeared = NULL;
+  inv.client_user_data = NULL;
+
   if (inv.clients)
     g_hash_table_destroy (inv.clients);
   g_clear_object (&inv.authority);

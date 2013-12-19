@@ -21,7 +21,6 @@
 
 #include "daemon.h"
 
-#include "invocation.h"
 #include "util.h"
 
 #include <glib/gi18n.h>
@@ -44,44 +43,35 @@ static GOptionEntry opt_entries[] =
   {NULL }
 };
 
-static UlDaemon *the_daemon = NULL;
-
 static void
-on_bus_acquired (GDBusConnection *connection,
-                 const gchar *name,
+on_bus_acquired (GObject *source,
+                 GAsyncResult *res,
                  gpointer user_data)
 {
-  ul_invocation_initialize (connection);
-  the_daemon = g_object_new (UL_TYPE_DAEMON,
-                             "connection", connection,
-                             "resource-dir", opt_resources,
-                             NULL);
+  UlDaemon **daemon = user_data;
+  GDBusConnection *connection;
+  GError *error = NULL;
 
-  g_debug ("Connected to the system bus");
-}
-
-static void
-on_name_lost (GDBusConnection *connection,
-              const gchar *name,
-              gpointer user_data)
-{
-  if (the_daemon == NULL)
+  connection = g_bus_get_finish (res, &error);
+  if (error != NULL)
     {
-      g_critical ("Failed to connect to the system message bus");
+      g_warning ("Couldn't connect to system bus: %s", error->message);
+      g_error_free (error);
+      g_main_loop_quit (loop);
     }
   else
     {
-      g_message ("Lost (or failed to acquire) the name %s on the system message bus", name);
-    }
-  g_main_loop_quit (loop);
-}
+      *daemon = g_object_new (UL_TYPE_DAEMON,
+                              "connection", connection,
+                              "resource-dir", opt_resources,
+                              "replace-name", opt_replace,
+                              NULL);
 
-static void
-on_name_acquired (GDBusConnection *connection,
-                  const gchar *name,
-                  gpointer user_data)
-{
-  g_info ("Acquired the name %s on the system message bus", name);
+      g_signal_connect_swapped (*daemon, "finished",
+                                G_CALLBACK (g_main_loop_quit), loop);
+    }
+
+  g_debug ("Connected to the system bus");
 }
 
 static gboolean
@@ -230,13 +220,12 @@ main (int argc,
   GError *error;
   GOptionContext *opt_context;
   GIOChannel *channel;
-  guint name_owner_id;
+  UlDaemon *daemon = NULL;
   gint ret;
 
   ret = 1;
   loop = NULL;
   opt_context = NULL;
-  name_owner_id = 0;
 
 #if !GLIB_CHECK_VERSION(2,36,0)
   g_type_init ();
@@ -289,16 +278,7 @@ main (int argc,
   g_unix_signal_add (SIGTERM, on_sigint, NULL);
   g_unix_signal_add (SIGHUP, on_sigint, NULL);
 
-  name_owner_id = g_bus_own_name (G_BUS_TYPE_SYSTEM,
-                                  "com.redhat.lvm2",
-                                  G_BUS_NAME_OWNER_FLAGS_ALLOW_REPLACEMENT |
-                                    (opt_replace ? G_BUS_NAME_OWNER_FLAGS_REPLACE : 0),
-                                  on_bus_acquired,
-                                  on_name_acquired,
-                                  on_name_lost,
-                                  NULL,
-                                  NULL);
-
+  g_bus_get (G_BUS_TYPE_SYSTEM, NULL, &on_bus_acquired, &daemon);
 
   g_debug ("Entering main event loop");
 
@@ -307,15 +287,11 @@ main (int argc,
   ret = 0;
 
  out:
-  if (the_daemon != NULL)
-    g_object_unref (the_daemon);
-  if (name_owner_id != 0)
-    g_bus_unown_name (name_owner_id);
+  g_clear_object (&daemon);
   if (loop != NULL)
     g_main_loop_unref (loop);
   if (opt_context != NULL)
     g_option_context_free (opt_context);
-  ul_invocation_cleanup ();
 
   g_info ("udisks-lvm version %s exiting", PACKAGE_VERSION);
 

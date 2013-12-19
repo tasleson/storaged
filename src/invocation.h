@@ -20,9 +20,13 @@
 
 G_BEGIN_DECLS
 
-typedef void (* UlLifeFunc) (gpointer user_data);
+typedef void (* UlClientFunc) (const gchar *bus_name,
+                               gpointer user_data);
 
-void                 ul_invocation_initialize             (GDBusConnection *connection);
+void                 ul_invocation_initialize             (GDBusConnection *connection,
+                                                           UlClientFunc client_appeared,
+                                                           UlClientFunc client_disappeared,
+                                                           gpointer user_data);
 
 uid_t                ul_invocation_get_caller_uid         (GDBusMethodInvocation *invocation);
 
