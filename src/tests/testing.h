@@ -27,6 +27,8 @@
 
 extern const gchar * testing_target_name;
 
+extern const gint testing_timeout;
+
 gboolean             testing_target_init            (void);
 
 GDBusConnection *    testing_target_connect         (void);
@@ -40,6 +42,14 @@ gpointer             testing_target_launch          (const gchar *wait_until,
                                                      ...) G_GNUC_NULL_TERMINATED;
 
 gint                 testing_target_wait            (gpointer launched);
+
+void                 testing_target_setup           (GDBusConnection **connection,
+                                                     GDBusObjectManager **objman,
+                                                     gpointer *daemon);
+
+void                 testing_target_teardown        (GDBusConnection **connection,
+                                                     GDBusObjectManager **objman,
+                                                     gpointer *daemon);
 
 #define TESTING_TYPE_IO_STREAM    (testing_io_stream_get_type ())
 #define TESTING_IO_STREAM(o)      (G_TYPE_CHECK_INSTANCE_CAST ((o), TESTING_TYPE_IO_STREAM, TestingIOStream))
@@ -88,5 +98,26 @@ void             testing_assertion_message        (const gchar *log_domain,
                                                    const gchar *func,
                                                    const gchar *format,
                                                    ...) G_GNUC_PRINTF (5, 6);
+
+gboolean         testing_callback_set_flag        (gpointer user_data);
+
+#define testing_wait_until(cond) G_STMT_START { \
+  GSource *__source = g_timeout_source_new_seconds (testing_timeout); \
+  gboolean __timeout = FALSE; \
+  g_source_set_callback (__source, testing_callback_set_flag, &__timeout, NULL); \
+  g_source_attach (__source, NULL); \
+  while (!(cond) && !__timeout) \
+    g_main_context_iteration (NULL, TRUE); \
+  g_source_destroy (__source); \
+  g_source_unref (__source); \
+  if (__timeout) \
+    { \
+      testing_assertion_message (G_LOG_DOMAIN, __FILE__, __LINE__, G_STRFUNC, \
+                                 "condition failed: (%s)", #cond); \
+    } \
+} G_STMT_END
+
+const gchar *    testing_proxy_string             (GDBusProxy *proxy,
+                                                   const gchar *property);
 
 #endif /* __TESTING_IO_STREAM_H__ */

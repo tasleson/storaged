@@ -57,6 +57,7 @@
 
 /* Global setup by testing_target_init() */
 const gchar *testing_target_name = NULL;
+const gint testing_timeout = 10;
 static GPid control_master_pid = 0;
 static gchar control_path_arg[256];
 static const gchar *control_path_prefix = "ControlPath=";
@@ -599,6 +600,92 @@ testing_target_wait (gpointer launch)
   return exit_status;
 }
 
+static void
+unbreak_object_manager_added (GDBusObjectManager *udisks_object_manager,
+                              GDBusObject *object,
+                              gpointer user_data)
+{
+  GList *interfaces, *l;
+
+  /* Yes, GDBusObjectManager really is this awkward */
+  interfaces = g_dbus_object_get_interfaces (object);
+  for (l = interfaces; l != NULL; l = g_list_next (l))
+    g_signal_emit_by_name (udisks_object_manager, "interface-added", object, l->data);
+  g_list_free_full (interfaces, g_object_unref);
+}
+
+static void
+unbreak_object_manager_removed (GDBusObjectManager *udisks_object_manager,
+                                GDBusObject *object,
+                                gpointer user_data)
+{
+  GList *interfaces, *l;
+
+  /* Yes, GDBusObjectManager really is this awkward */
+  interfaces = g_dbus_object_get_interfaces (object);
+  for (l = interfaces; l != NULL; l = g_list_next (l))
+    g_signal_emit_by_name (udisks_object_manager, "interface-removed", object, l->data);
+  g_list_free_full (interfaces, g_object_unref);
+}
+
+void
+testing_target_setup (GDBusConnection **connection,
+                      GDBusObjectManager **objman,
+                      gpointer *daemon)
+{
+  GError *error = NULL;
+
+  *connection = testing_target_connect ();
+
+  if (testing_target_name)
+    {
+      *daemon = testing_target_launch ("*Acquired*on the system message bus*",
+                                       BUILDDIR "/src/udisksd-lvm",
+                                       "--resource-dir=" BUILDDIR "/src",
+                                       "--replace", "--debug",
+                                       NULL);
+    }
+
+  *objman = g_dbus_object_manager_client_new_sync (*connection,
+                                                   G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_DO_NOT_AUTO_START,
+                                                   "com.redhat.lvm2",
+                                                   "/org/freedesktop/UDisks2",
+                                                   NULL, NULL, NULL, NULL, &error);
+  g_assert_no_error (error);
+
+  /* Groan */
+  g_signal_connect (*objman, "object-added", G_CALLBACK (unbreak_object_manager_added), NULL);
+  g_signal_connect (*objman, "object-removed", G_CALLBACK (unbreak_object_manager_removed), NULL);
+
+  /* Free up any unused devices */
+  testing_target_execute (NULL, "losetup", "-D", NULL);
+  testing_target_execute (NULL, "pvscan", "--cache", NULL);
+}
+
+void
+testing_target_teardown (GDBusConnection **connection,
+                         GDBusObjectManager **objman,
+                         gpointer *daemon)
+{
+  GError *error = NULL;
+  gint status;
+
+  g_clear_object (objman);
+
+  g_dbus_connection_flush_sync (*connection, NULL, &error);
+  g_assert_no_error (error);
+  g_clear_object (connection);
+
+  if (testing_target_name)
+    {
+      status = testing_target_wait (*daemon);
+      g_assert_cmpint (status, ==, 0);
+      *daemon = NULL;
+    }
+
+  testing_target_execute (NULL, "losetup", "-D", NULL);
+}
+
 void
 testing_assertion_message (const gchar *log_domain,
                            const gchar *file,
@@ -617,6 +704,32 @@ testing_assertion_message (const gchar *log_domain,
   g_assertion_message (log_domain, file, line, func, message);
   g_free (message);
 }
+
+gboolean
+testing_callback_set_flag (gpointer user_data)
+{
+  gboolean *flag = user_data;
+  *flag = TRUE;
+  return FALSE;
+}
+
+const gchar *
+testing_proxy_string (GDBusProxy *proxy,
+                      const gchar *property)
+{
+  GVariant *value;
+  const gchar *ret = NULL;
+
+  value = g_dbus_proxy_get_cached_property (proxy, property);
+  if (value)
+    {
+      ret = g_variant_get_string (value, NULL);
+      g_variant_unref (value);
+    }
+
+  return ret;
+}
+
 
 struct _TestingIOStream {
   GIOStream parent;

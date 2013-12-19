@@ -32,46 +32,14 @@ static void
 setup_target (Test *test,
               gconstpointer data)
 {
-  GError *error = NULL;
-
-  test->bus = testing_target_connect ();
-
-  /* If local, expect it to be running */
-  if (testing_target_name)
-    {
-      test->daemon = testing_target_launch ("*Acquired*on the system message bus*",
-                                            BUILDDIR "/src/udisksd-lvm",
-                                            "--resource-dir=" BUILDDIR "/src",
-                                            "--replace", "--debug",
-                                            NULL);
-    }
-
-  test->objman = g_dbus_object_manager_client_new_sync (test->bus,
-                                                        G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_DO_NOT_AUTO_START,
-                                                        "com.redhat.lvm2",
-                                                        "/org/freedesktop/UDisks2",
-                                                        NULL, NULL, NULL, NULL, &error);
-  g_assert_no_error (error);
+  testing_target_setup (&test->bus, &test->objman, &test->daemon);
 }
 
 static void
 teardown_target (Test *test,
                  gconstpointer data)
 {
-  GError *error = NULL;
-  gint status;
-
-  g_clear_object (&test->objman);
-
-  g_dbus_connection_flush_sync (test->bus, NULL, &error);
-  g_assert_no_error (error);
-  g_clear_object (&test->bus);
-
-  if (testing_target_name)
-    {
-      status = testing_target_wait (test->daemon);
-      g_assert_cmpint (status, ==, 0);
-    }
+  testing_target_teardown (&test->bus, &test->objman, &test->daemon);
 }
 
 static void
@@ -172,8 +140,7 @@ test_add_remove (Test *test,
   testing_target_execute (NULL, "losetup", device, "test-udisk-lvm-1", NULL);
 
   /* Wait for the device to appear */
-  while (block_path == NULL)
-    g_main_context_iteration (NULL, TRUE);
+  testing_wait_until (block_path != NULL);
 
   /* Path name should match the /dev/xxx name */
   name = g_path_get_basename (device);
@@ -191,8 +158,7 @@ test_add_remove (Test *test,
   testing_target_execute (&losetup_out, "rmmod", "loop", NULL);
 
   /* Wait for the block to disappear */
-  while (block_path != NULL)
-    g_main_context_iteration (NULL, TRUE);
+  testing_wait_until (block_path == NULL);
 
   g_free (device);
 }
