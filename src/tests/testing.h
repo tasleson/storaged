@@ -117,6 +117,9 @@ gboolean         testing_callback_set_flag        (gpointer user_data);
     } \
 } G_STMT_END
 
+#define testing_wait_idle() \
+  do { } while (g_main_context_iteration (NULL, FALSE))
+
 const gchar *    testing_proxy_string             (GDBusProxy *proxy,
                                                    const gchar *property);
 

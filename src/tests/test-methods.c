@@ -33,6 +33,7 @@ typedef struct {
   } blocks[3];
 
   GDBusProxy *volume_group;
+  GDBusProxy *logical_volume;
 } Test;
 
 static void
@@ -101,6 +102,16 @@ on_volume_group_added (GDBusObjectManager *objman,
 }
 
 static void
+on_logical_volume_added (GDBusObjectManager *objman,
+                         GDBusObject *make_it_stop,
+                         GDBusInterface *interface,
+                         gpointer user_data)
+{
+  ret_proxy_if_interface_matches (G_DBUS_PROXY (interface),
+                                  "com.redhat.lvm2.LogicalVolume", user_data);
+}
+
+static void
 on_proxy_removed (GDBusObjectManager *objman,
                   GDBusObject *make_it_stop,
                   GDBusInterface *interface,
@@ -148,6 +159,41 @@ teardown_vgremove (Test *test,
   g_clear_object (&test->volume_group);
   testing_target_execute (NULL, "vgremove", "-f", "test-udisk-lvm", NULL);
   teardown_target (test, data);
+}
+
+static void
+setup_vgcreate_lvcreate (Test *test,
+                         gconstpointer data)
+{
+  const gchar *lvname = data;
+  gulong sig;
+
+  setup_vgcreate (test, data);
+
+  sig = g_signal_connect (test->objman, "interface-added",
+                          G_CALLBACK (on_logical_volume_added), &test->logical_volume);
+
+  testing_target_execute (NULL, "lvcreate", "test-udisk-lvm", "--name", lvname,
+                          "--size", "20m", "--activate", "n", "--zero", "n", NULL);
+
+  testing_wait_until (test->logical_volume != NULL);
+  g_signal_handler_disconnect (test->objman, sig);
+}
+
+static void
+teardown_lvremove_vgremove (Test *test,
+                            gconstpointer data)
+{
+  const gchar *lvname = data;
+  gchar *full_name;
+
+  g_clear_object (&test->logical_volume);
+
+  full_name = g_strdup_printf ("test-udisk-lvm/%s", lvname);
+  testing_target_execute (NULL, "lvremove", "-f", full_name, NULL);
+  g_free (full_name);
+
+  teardown_vgremove (test, data);
 }
 
 static void
@@ -211,6 +257,111 @@ test_volume_group_delete (Test *test,
   g_variant_unref (retval);
 }
 
+static void
+test_logical_volume_create (Test *test,
+                            gconstpointer data)
+{
+  const gchar *name = data;
+  GVariant *retval;
+  GError *error = NULL;
+  const gchar *path;
+  GDBusProxy *logical_volume;
+  const gchar *volume_group_path;
+
+  retval = g_dbus_proxy_call_sync (test->volume_group, "CreatePlainVolume",
+                                   g_variant_new ("(stit@a{sv})",
+                                                  name,
+                                                  (guint64)20 * 1024 * 1024,
+                                                  0, /* stripes */
+                                                  0, /* stripesize */
+                                                  g_variant_new_array (G_VARIANT_TYPE ("{sv}"), NULL, 0)),
+                                   G_DBUS_CALL_FLAGS_NO_AUTO_START,
+                                   -1, NULL, &error);
+  g_assert_no_error (error);
+
+  /* Pull out the logical volume from path */
+  g_variant_get (retval, "(&o)", &path);
+  testing_wait_idle ();
+  logical_volume = lookup_interface (test, path, "com.redhat.lvm2.LogicalVolume");
+  g_assert (logical_volume != NULL);
+
+  volume_group_path = g_dbus_proxy_get_object_path (test->volume_group);
+  g_assert_cmpstr (testing_proxy_string (logical_volume, "VolumeGroup"), ==, volume_group_path);
+  g_assert_str_prefix (path, volume_group_path);
+  g_assert_cmpstr (testing_proxy_string (logical_volume, "Name"), ==, name);
+
+  g_variant_unref (retval);
+}
+
+static void
+test_logical_volume_delete (Test *test,
+                            gconstpointer data)
+{
+  GVariant *retval;
+  GError *error = NULL;
+
+  /* Now delete it, and it should dissappear */
+  g_signal_connect (test->objman, "interface-removed",
+                    G_CALLBACK (on_proxy_removed), &test->logical_volume);
+
+  retval = g_dbus_proxy_call_sync (test->logical_volume, "Delete",
+                                   g_variant_new ("(@a{sv})",
+                                                  g_variant_new_array (G_VARIANT_TYPE ("{sv}"), NULL, 0)),
+                                   G_DBUS_CALL_FLAGS_NO_AUTO_START,
+                                   -1, NULL, &error);
+
+  g_assert_no_error (error);
+
+  /* The object should disappear */
+  testing_wait_until (test->logical_volume == NULL);
+
+  g_variant_unref (retval);
+}
+
+static void
+test_logical_volume_activate (Test *test,
+                              gconstpointer data)
+{
+  GVariant *retval;
+  GError *error = NULL;
+  const gchar *logical_volume_path;
+  const gchar *block_path;
+  GDBusProxy *block;
+
+  /* Activating the logical volume should turn into a block */
+  retval = g_dbus_proxy_call_sync (test->logical_volume, "Activate",
+                                   g_variant_new ("(@a{sv})",
+                                                  g_variant_new_array (G_VARIANT_TYPE ("{sv}"), NULL, 0)),
+                                   G_DBUS_CALL_FLAGS_NO_AUTO_START,
+                                   -1, NULL, &error);
+  g_assert_no_error (error);
+
+  /* Pull out the logical volume from path */
+  g_variant_get (retval, "(&o)", &block_path);
+  testing_wait_idle ();
+  block = lookup_interface (test, block_path, "com.redhat.lvm2.LogicalVolumeBlock");
+  g_assert (block != NULL);
+
+  logical_volume_path = g_dbus_proxy_get_object_path (test->logical_volume);
+  g_assert_cmpstr (testing_proxy_string (block, "LogicalVolume"), ==, logical_volume_path);
+  g_variant_unref (retval);
+
+  /* Deactivating the logical volume should make block go away */
+  g_signal_connect (test->objman, "interface-removed",
+                    G_CALLBACK (on_proxy_removed), &block);
+
+  retval = g_dbus_proxy_call_sync (test->logical_volume, "Deactivate",
+                                   g_variant_new ("(@a{sv})",
+                                                  g_variant_new_array (G_VARIANT_TYPE ("{sv}"), NULL, 0)),
+                                   G_DBUS_CALL_FLAGS_NO_AUTO_START,
+                                   -1, NULL, &error);
+  g_assert_no_error (error);
+  g_variant_unref (retval);
+
+  /* The object should disappear */
+  testing_wait_until (block == NULL);
+}
+
 int
 main (int argc,
       char **argv)
@@ -227,6 +378,13 @@ main (int argc,
                   setup_target, test_volume_group_create, teardown_vgremove);
       g_test_add ("/udisks/lvm/volume-group/delete", Test, NULL,
                   setup_vgcreate, test_volume_group_delete, teardown_target);
+
+      g_test_add ("/udisks/lvm/logical-volume/create", Test, "volone",
+                  setup_vgcreate, test_logical_volume_create, teardown_lvremove_vgremove);
+      g_test_add ("/udisks/lvm/logical-volume/delete", Test, "volone",
+                  setup_vgcreate_lvcreate, test_logical_volume_delete, teardown_vgremove);
+      g_test_add ("/udisks/lvm/logical-volume/activate", Test, "volone",
+                  setup_vgcreate_lvcreate, test_logical_volume_activate, teardown_lvremove_vgremove);
     }
 
   return g_test_run ();
