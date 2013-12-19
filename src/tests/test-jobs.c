@@ -389,13 +389,13 @@ test_spawned_job_abnormal_termination (void)
 
   job = ul_spawned_job_new (argv4, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
-                          (gpointer) "/data/src/udisks-lvm/src/tests/frob-helper was signaled with signal SIGSEGV (11): "
+                          (gpointer) BUILDDIR "/src/tests/frob-helper was signaled with signal SIGSEGV (11): "
                           "OK, deliberately causing a segfault\n");
   g_object_unref (job);
 
   job = ul_spawned_job_new (argv5, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
-                             (gpointer) "/data/src/udisks-lvm/src/tests/frob-helper was signaled with signal SIGABRT (6): "
+                             (gpointer) BUILDDIR "/src/tests/frob-helper was signaled with signal SIGABRT (6): "
                                  "OK, deliberately abort()'ing\n");
   g_object_unref (job);
 }
