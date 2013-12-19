@@ -20,7 +20,6 @@
 
 #include "config.h"
 
-#include "daemon.h"
 #include "job.h"
 #include "threadedjob.h"
 
@@ -331,7 +330,6 @@ ul_threaded_job_class_init (UlThreadedJobClass *klass)
  * @job_func: The function to run in another thread.
  * @user_data: User data to pass to @job_func.
  * @user_data_free_func: Function to free @user_data with or %NULL.
- * @daemon: A #UDisksDaemon.
  * @cancellable: A #GCancellable or %NULL.
  *
  * Creates a new #UlThreadedJob instance.
@@ -346,7 +344,6 @@ UlThreadedJob *
 ul_threaded_job_new (UlJobFunc job_func,
                      gpointer user_data,
                      GDestroyNotify user_data_free_func,
-                     UlDaemon *daemon,
                      GCancellable *cancellable)
 {
   g_return_val_if_fail (cancellable == NULL || G_IS_CANCELLABLE (cancellable), NULL);
@@ -355,7 +352,6 @@ ul_threaded_job_new (UlJobFunc job_func,
                        "job-func", job_func,
                        "user-data", user_data,
                        "user-data-free-func", user_data_free_func,
-                       "daemon", daemon,
                        "cancellable", cancellable,
                        NULL);
 }

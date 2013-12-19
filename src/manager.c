@@ -69,14 +69,10 @@ lvm_update_from_variant (GPid pid,
                          gpointer user_data)
 {
   UlManager *self = user_data;
-  UlDaemon *daemon;
   GVariantIter var_iter;
   GHashTableIter vg_name_iter;
   gpointer key, value;
   const gchar *name;
-  gchar *path;
-
-  daemon = ul_daemon_get ();
 
   if (error != NULL)
     {

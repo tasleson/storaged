@@ -538,7 +538,7 @@ ul_daemon_launch_spawned_jobv (UlDaemon *self,
   g_return_val_if_fail (cancellable == NULL || G_IS_CANCELLABLE (cancellable), NULL);
 
   job = ul_spawned_job_new (argv, input_string,
-                            run_as_uid, run_as_euid, self, cancellable);
+                            run_as_uid, run_as_euid, cancellable);
 
   if (object_or_interface != NULL)
     ul_job_add_thing (UL_JOB (job), object_or_interface);
@@ -612,7 +612,6 @@ ul_daemon_launch_threaded_job  (UlDaemon *daemon,
   job = ul_threaded_job_new (job_func,
                              user_data,
                              user_data_free_func,
-                             daemon,
                              cancellable);
   if (object_or_interface != NULL)
     ul_job_add_thing (UL_JOB (job), object_or_interface);

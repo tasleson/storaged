@@ -24,7 +24,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "daemon.h"
 #include "job.h"
 
 #define MAX_SAMPLES 100
@@ -46,7 +45,6 @@ typedef struct
 struct _UlJobPrivate
 {
   GCancellable *cancellable;
-  UlDaemon *daemon;
 
   gboolean auto_estimate;
   gulong notify_progress_signal_handler_id;
@@ -95,10 +93,6 @@ ul_job_get_property (GObject *object,
 
   switch (prop_id)
     {
-    case PROP_DAEMON:
-      g_value_set_object (value, self->priv->daemon);
-      break;
-
     case PROP_CANCELLABLE:
       g_value_set_object (value, self->priv->cancellable);
       break;
@@ -123,12 +117,6 @@ ul_job_set_property (GObject *object,
 
   switch (prop_id)
     {
-    case PROP_DAEMON:
-      g_assert (self->priv->daemon == NULL);
-      /* we don't take a reference to the daemon */
-      self->priv->daemon = g_value_get_object (value);
-      break;
-
     case PROP_CANCELLABLE:
       g_assert (self->priv->cancellable == NULL);
       self->priv->cancellable = g_value_dup_object (value);
@@ -181,22 +169,6 @@ ul_job_class_init (UlJobClass *klass)
   gobject_class->constructed  = ul_job_constructed;
   gobject_class->set_property = ul_job_set_property;
   gobject_class->get_property = ul_job_get_property;
-
-  /**
-   * UlJob:daemon:
-   *
-   * The #UlDaemon the object is for.
-   */
-  g_object_class_install_property (gobject_class,
-                                   PROP_DAEMON,
-                                   g_param_spec_object ("daemon",
-                                                        "Daemon",
-                                                        "The daemon the object is for",
-                                                        UL_TYPE_DAEMON,
-                                                        G_PARAM_READABLE |
-                                                        G_PARAM_WRITABLE |
-                                                        G_PARAM_CONSTRUCT_ONLY |
-                                                        G_PARAM_STATIC_STRINGS));
 
   /**
    * UlJob:cancellable:

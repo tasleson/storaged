@@ -36,7 +36,6 @@ GType             ul_threaded_job_get_type         (void) G_GNUC_CONST;
 UlThreadedJob *   ul_threaded_job_new              (UlJobFunc job_func,
                                                     gpointer user_data,
                                                     GDestroyNotify user_data_free_func,
-                                                    UlDaemon *daemon,
                                                     GCancellable *cancellable);
 
 gpointer          ul_threaded_job_get_user_data    (UlThreadedJob *job);

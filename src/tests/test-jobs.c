@@ -156,7 +156,7 @@ test_spawned_job_successful (void)
   UlSpawnedJob *job;
   const gchar *argv[] = { "/bin/true", NULL };
 
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL, NULL);
+  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_success), NULL);
   g_object_unref (job);
 }
@@ -169,7 +169,7 @@ test_spawned_job_failure (void)
   UlSpawnedJob *job;
   const gchar *argv[] = { "/bin/false", NULL };
 
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL, NULL);
+  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
                           (gpointer) "/bin/false exited with non-zero exit status 1");
   g_object_unref (job);
@@ -183,7 +183,7 @@ test_spawned_job_missing_program (void)
   UlSpawnedJob *job;
   const gchar *argv[] = { "/path/to/unknown/file", NULL };
 
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL, NULL);
+  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
                           (gpointer) "Error spawning command-line `/path/to/unknown/file': Failed to execute child process \"/path/to/unknown/file\" (No such file or directory) (g-exec-error-quark, 8)");
   g_object_unref (job);
@@ -200,7 +200,7 @@ test_spawned_job_cancelled_at_start (void)
 
   cancellable = g_cancellable_new ();
   g_cancellable_cancel (cancellable);
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL, cancellable);
+  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), cancellable);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
                           (gpointer) "Operation was cancelled (g-io-error-quark, 19)");
   g_object_unref (job);
@@ -226,7 +226,7 @@ test_spawned_job_cancelled_midway (void)
   const gchar *argv[] = { "/bin/sleep 0.5", NULL };
 
   cancellable = g_cancellable_new ();
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL, cancellable);
+  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), cancellable);
   g_timeout_add (10, on_timeout, cancellable); /* 10 msec */
   g_main_loop_run (loop);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
@@ -259,7 +259,7 @@ test_spawned_job_override_signal_handler (void)
   gboolean handler_ran;
   const gchar *argv[] = { "/path/to/unknown/file", NULL };
 
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL, NULL /* GCancellable */);
+  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL /* GCancellable */);
   handler_ran = FALSE;
   g_signal_connect (job, "spawned-job-completed", G_CALLBACK (on_spawned_job_completed), &handler_ran);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
@@ -276,7 +276,7 @@ test_spawned_job_premature_termination (void)
   UlSpawnedJob *job;
   const gchar *argv[] = { "/bin/sleep", "1000", NULL };
 
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL, NULL /* GCancellable */);
+  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL /* GCancellable */);
   g_object_unref (job);
 }
 
@@ -306,7 +306,7 @@ test_spawned_job_read_stdout (void)
   UlSpawnedJob *job;
   const gchar *argv[] = { BUILDDIR "/src/tests/frob-helper", "0", NULL };
 
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL, NULL);
+  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "spawned-job-completed", G_CALLBACK (read_stdout_on_spawned_job_completed), NULL);
   g_object_unref (job);
 }
@@ -337,7 +337,7 @@ test_spawned_job_read_stderr (void)
   UlSpawnedJob *job;
   const gchar *argv[] = { BUILDDIR "/src/tests/frob-helper", "1", NULL };
 
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL, NULL);
+  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "spawned-job-completed", G_CALLBACK (read_stderr_on_spawned_job_completed), NULL);
   g_object_unref (job);
 }
@@ -367,12 +367,12 @@ test_spawned_job_exit_status (void)
   const gchar *argv2[] = { BUILDDIR "/src/tests/frob-helper", "2", NULL };
   const gchar *argv3[] = { BUILDDIR "/src/tests/frob-helper", "3", NULL };
 
-  job = ul_spawned_job_new (argv2, NULL, getuid (), geteuid (), NULL, NULL);
+  job = ul_spawned_job_new (argv2, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "spawned-job-completed", G_CALLBACK (exit_status_on_spawned_job_completed),
                           GINT_TO_POINTER (1));
   g_object_unref (job);
 
-  job = ul_spawned_job_new (argv3, NULL, getuid (), geteuid (), NULL, NULL);
+  job = ul_spawned_job_new (argv3, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "spawned-job-completed", G_CALLBACK (exit_status_on_spawned_job_completed),
                           GINT_TO_POINTER (2));
   g_object_unref (job);
@@ -387,13 +387,13 @@ test_spawned_job_abnormal_termination (void)
   const gchar *argv4[] = { BUILDDIR "/src/tests/frob-helper", "4", NULL };
   const gchar *argv5[] = { BUILDDIR "/src/tests/frob-helper", "5", NULL };
 
-  job = ul_spawned_job_new (argv4, NULL, getuid (), geteuid (), NULL, NULL);
+  job = ul_spawned_job_new (argv4, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
                           (gpointer) "/data/src/udisks-lvm/src/tests/frob-helper was signaled with signal SIGSEGV (11): "
                           "OK, deliberately causing a segfault\n");
   g_object_unref (job);
 
-  job = ul_spawned_job_new (argv5, NULL, getuid (), geteuid (), NULL, NULL);
+  job = ul_spawned_job_new (argv5, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
                              (gpointer) "/data/src/udisks-lvm/src/tests/frob-helper was signaled with signal SIGABRT (6): "
                                  "OK, deliberately abort()'ing\n");
@@ -432,7 +432,7 @@ test_spawned_job_binary_output (void)
   UlSpawnedJob *job;
   const gchar *argv6[] = { BUILDDIR "/src/tests/frob-helper", "6", NULL };
 
-  job = ul_spawned_job_new (argv6, NULL, getuid (), geteuid (), NULL, NULL);
+  job = ul_spawned_job_new (argv6, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "spawned-job-completed", G_CALLBACK (binary_output_on_spawned_job_completed), NULL);
   g_object_unref (job);
 }
@@ -461,7 +461,7 @@ test_spawned_job_input_string (void)
   UlSpawnedJob *job;
   const gchar *argv7[] = { BUILDDIR "/src/tests/frob-helper", "7", NULL };
 
-  job = ul_spawned_job_new (argv7, "foobar", getuid (), geteuid (), NULL, NULL);
+  job = ul_spawned_job_new (argv7, "foobar", getuid (), geteuid (), NULL);
   assert_signal_received (job, "spawned-job-completed", G_CALLBACK (input_string_on_spawned_job_completed), NULL);
   g_object_unref (job);
 }
@@ -482,7 +482,7 @@ test_threaded_job_successful (void)
 {
   UlThreadedJob *job;
 
-  job = ul_threaded_job_new (threaded_job_successful_func, NULL, NULL, NULL, NULL);
+  job = ul_threaded_job_new (threaded_job_successful_func, NULL, NULL, NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_success), NULL);
   g_object_unref (job);
 }
@@ -507,7 +507,7 @@ test_threaded_job_failure (void)
 {
   UlThreadedJob *job;
 
-  job = ul_threaded_job_new (threaded_job_failure_func, NULL, NULL, NULL, NULL);
+  job = ul_threaded_job_new (threaded_job_failure_func, NULL, NULL, NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
                           (gpointer) "Threaded job failed with error: some error (g-key-file-error-quark, 5)");
   g_object_unref (job);
@@ -523,7 +523,7 @@ test_threaded_job_cancelled_at_start (void)
 
   cancellable = g_cancellable_new ();
   g_cancellable_cancel (cancellable);
-  job = ul_threaded_job_new (threaded_job_successful_func, NULL, NULL, NULL, cancellable);
+  job = ul_threaded_job_new (threaded_job_successful_func, NULL, NULL, cancellable);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
                           (gpointer) "Threaded job failed with error: Operation was cancelled (g-io-error-quark, 19)");
   g_object_unref (job);
@@ -561,7 +561,7 @@ test_threaded_job_cancelled_midway (void)
 
   cancellable = g_cancellable_new ();
   count = 0;
-  job = ul_threaded_job_new (threaded_job_sleep_until_cancelled, &count, NULL, NULL, cancellable);
+  job = ul_threaded_job_new (threaded_job_sleep_until_cancelled, &count, NULL, cancellable);
   g_timeout_add (10, on_timeout, cancellable); /* 10 msec */
   g_main_loop_run (loop);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
@@ -594,7 +594,7 @@ test_threaded_job_override_signal_handler (void)
   UlThreadedJob *job;
   gboolean handler_ran;
 
-  job = ul_threaded_job_new (threaded_job_failure_func, NULL, NULL, NULL, NULL);
+  job = ul_threaded_job_new (threaded_job_failure_func, NULL, NULL, NULL);
   handler_ran = FALSE;
   g_signal_connect (job, "threaded-job-completed", G_CALLBACK (on_threaded_job_completed), &handler_ran);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),

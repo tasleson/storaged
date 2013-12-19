@@ -23,8 +23,6 @@
 
 #include <gio/gio.h>
 
-#include "daemon.h"
-
 G_BEGIN_DECLS
 
 #define UL_TYPE_SPAWNED_JOB         (ul_spawned_job_get_type ())
@@ -39,7 +37,6 @@ UlSpawnedJob  *    ul_spawned_job_new              (const gchar **argv,
                                                     const gchar *input_string,
                                                     uid_t run_as_uid,
                                                     uid_t run_as_euid,
-                                                    UlDaemon *daemon,
                                                     GCancellable *cancellable);
 
 const gchar **     ul_spawned_job_get_argv         (UlSpawnedJob *job);

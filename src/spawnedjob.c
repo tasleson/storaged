@@ -22,7 +22,6 @@
 
 #include "spawnedjob.h"
 
-#include "daemon.h"
 #include "job.h"
 #include "util.h"
 
@@ -648,7 +647,6 @@ ul_spawned_job_class_init (UlSpawnedJobClass *klass)
  * @input_string: A string to write to stdin of the spawned program or %NULL.
  * @run_as_uid: The #uid_t to run the program as.
  * @run_as_euid: The effective #uid_t to run the program as.
- * @daemon: A #UlDaemon.
  * @cancellable: A #GCancellable or %NULL.
  *
  * Creates a new #UlSpawnedJob instance.
@@ -664,7 +662,6 @@ ul_spawned_job_new (const gchar **argv,
                     const gchar *input_string,
                     uid_t run_as_uid,
                     uid_t run_as_euid,
-                    UlDaemon *daemon,
                     GCancellable *cancellable)
 {
   g_return_val_if_fail (argv != NULL, NULL);
@@ -675,7 +672,6 @@ ul_spawned_job_new (const gchar **argv,
                        "input-string", input_string,
                        "run-as-uid", run_as_uid,
                        "run-as-euid", run_as_euid,
-                       "daemon", daemon,
                        "cancellable", cancellable,
                        NULL);
 }
