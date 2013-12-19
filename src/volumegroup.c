@@ -63,6 +63,7 @@ struct _UlVolumeGroup
   LvmVolumeGroupSkeleton parent_instance;
 
   gchar *name;
+  gboolean need_publish;
 
   GHashTable *logical_volumes;
   GPid poll_pid;
@@ -94,6 +95,7 @@ ul_volume_group_init (UlVolumeGroup *self)
 {
   self->logical_volumes = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
                                                  (GDestroyNotify) g_object_unref);
+  self->need_publish = TRUE;
 }
 
 static void
@@ -104,7 +106,9 @@ ul_volume_group_dispose (GObject *obj)
   const gchar *path;
   gpointer value;
 
-  /* Unpublish all the volumes */
+  self->need_publish = FALSE;
+
+  /* Dispose all the volumes, should unpublish */
   g_hash_table_iter_init (&iter, self->logical_volumes);
   while (g_hash_table_iter_next (&iter, NULL, &value))
       g_object_run_dispose (value);
@@ -425,6 +429,21 @@ update_with_variant (GPid pid,
   UlDaemon *daemon;
   gchar *path;
 
+  daemon = ul_daemon_get ();
+
+  if (!error)
+      volume_group_update_props (self, info, &needs_polling);
+
+  /* After basic props, publish group, if not already done */
+  if (self->need_publish)
+    {
+      self->need_publish = FALSE;
+      path = ul_util_build_object_path ("/org/freedesktop/UDisks2/lvm",
+                                        ul_volume_group_get_name (self), NULL);
+      ul_daemon_publish (daemon, path, FALSE, self);
+      g_free (path);
+    }
+
   if (error)
     {
       g_message ("Failed to update LVM volume group %s: %s",
@@ -432,9 +451,6 @@ update_with_variant (GPid pid,
       g_object_unref (self);
       return;
     }
-
-  daemon = ul_daemon_get ();
-  volume_group_update_props (self, info, &needs_polling);
 
   new_lvs = g_hash_table_new (g_str_hash, g_str_equal);
 
@@ -461,11 +477,6 @@ update_with_variant (GPid pid,
             {
               volume = ul_logical_volume_new (self, name);
               ul_logical_volume_update (volume, self, lv_info, &needs_polling);
-
-              path = ul_util_build_object_path (ul_volume_group_get_object_path (self),
-                                                ul_logical_volume_get_name (volume), NULL);
-              ul_daemon_publish (daemon, path, TRUE, volume);
-              g_free (path);
 
               g_hash_table_insert (self->logical_volumes, g_strdup (name), g_object_ref (volume));
             }
@@ -509,6 +520,7 @@ update_with_variant (GPid pid,
         }
     }
 
+  /* Make sure above is published before updating blocks to point at volume group */
   blocks = ul_daemon_get_blocks (daemon);
   for (l = blocks; l != NULL; l = g_list_next (l))
     update_block (self, l->data, new_lvs, new_pvs);

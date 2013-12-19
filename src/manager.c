@@ -125,13 +125,9 @@ lvm_update_from_variant (GPid pid,
           group = ul_volume_group_new (name);
           g_debug ("adding volume group: %s", name);
 
-          path = ul_util_build_object_path ("/org/freedesktop/UDisks2/lvm",
-                                            ul_volume_group_get_name (group), NULL);
-          ul_daemon_publish (daemon, path, TRUE, group);
-          g_free (path);
-
           g_hash_table_insert (self->name_to_volume_group, g_strdup (name), group);
         }
+
       ul_volume_group_update (group);
     }
 }

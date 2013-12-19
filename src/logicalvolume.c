@@ -52,6 +52,7 @@ struct _UlLogicalVolume
   LvmLogicalVolumeSkeleton parent_instance;
 
   gchar *name;
+  gboolean needs_publish;
   UlVolumeGroup *volume_group;
 };
 
@@ -79,7 +80,7 @@ G_DEFINE_TYPE_WITH_CODE (UlLogicalVolume, ul_logical_volume, LVM_TYPE_LOGICAL_VO
 static void
 ul_logical_volume_init (UlLogicalVolume *self)
 {
-
+  self->needs_publish = TRUE;
 }
 
 static void
@@ -88,6 +89,7 @@ ul_logical_volume_dispose (GObject *obj)
   UlLogicalVolume *self = UL_LOGICAL_VOLUME (obj);
   const gchar *path;
 
+  self->needs_publish = FALSE;
   path = ul_logical_volume_get_object_path (self);
   if (path != NULL)
     ul_daemon_unpublish (ul_daemon_get (), path, self);
@@ -258,6 +260,7 @@ ul_logical_volume_update (UlLogicalVolume *self,
   const char *origin_objpath;
   const gchar *str;
   guint64 num;
+  gchar *path;
 
   iface = LVM_LOGICAL_VOLUME (self);
 
@@ -336,6 +339,15 @@ ul_logical_volume_update (UlLogicalVolume *self,
   lvm_logical_volume_set_origin (iface, origin_objpath);
 
   ul_logical_volume_set_volume_group (self, group);
+
+  if (self->needs_publish)
+    {
+      self->needs_publish = FALSE;
+      path = ul_util_build_object_path (ul_volume_group_get_object_path (group),
+                                        ul_logical_volume_get_name (self), NULL);
+      ul_daemon_publish (ul_daemon_get (), path, FALSE, self);
+      g_free (path);
+    }
 }
 
 typedef struct {
