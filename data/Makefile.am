@@ -31,6 +31,9 @@ polkit_DATA      = $(polkit_in_files:.policy.in=.policy)
 
 @INTLTOOL_POLICY_RULE@
 
+dbusinterfacedir = $(datadir)/dbus-1/interfaces
+dbusinterface_DATA = com.redhat.lvm2.xml
+
 EXTRA_DIST = 						\
 	com.redhat.lvm2.xml				\
 	$(systemdservice_in_files)			\
