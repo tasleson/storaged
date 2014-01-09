@@ -1091,7 +1091,6 @@ handle_empty_device (LvmVolumeGroup *group,
                      const gchar *member_device_objpath,
                      GVariant *options)
 {
-  UlVolumeGroup *self = UL_VOLUME_GROUP (group);
   UlJob *job;
   UlDaemon *daemon;
   const gchar *member_device_file = NULL;
@@ -1111,7 +1110,7 @@ handle_empty_device (LvmVolumeGroup *group,
 
   member_device_file = ul_block_get_device (member_device);
 
-  job = ul_daemon_launch_spawned_job (daemon, self,
+  job = ul_daemon_launch_spawned_job (daemon, member_device,
                                       "lvm-vg-empty-device",
                                       ul_invocation_get_caller_uid (invocation),
                                       NULL, /* GCancellable */
