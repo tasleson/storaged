@@ -5,4 +5,4 @@ Documentation=man:udisks-lvm(8)
 [Service]
 Type=dbus
 BusName=com.redhat.lvm2
-ExecStart=@udisksdprivdir@/udisks-lvm --no-debug
+ExecStart=@udisksdprivdir@/udisksd-lvm
