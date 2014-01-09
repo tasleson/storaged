@@ -33,9 +33,9 @@
 /**
  * SECTION:udiskslinuxlogicalvolume
  * @title: UlLogicalVolume
- * @short_description: Linux implementation of #xUDisksLogicalVolume
+ * @short_description: Linux implementation of #LvmLogicalVolume
  *
- * This type provides an implementation of the #xUDisksLogicalVolume
+ * This type provides an implementation of the #LvmLogicalVolume
  * interface on Linux.
  */
 

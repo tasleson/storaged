@@ -31,9 +31,9 @@
 /**
  * SECTION:udiskslinuxphysicalvolume
  * @title: UlPhysicalVolume
- * @short_description: Linux implementation of #UDisksPhysicalVolume
+ * @short_description: Linux implementation of #LvmPhysicalVolumeBlock
  *
- * This type provides an implementation of the #UDisksPhysicalVolume
+ * This type provides an implementation of the #LvmPhysicalVolumeBlock
  * interface on Linux.
  */
 
