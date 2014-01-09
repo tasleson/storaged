@@ -1263,7 +1263,9 @@ handle_create_thin_pool_volume (LvmVolumeGroup *group,
   daemon = ul_daemon_get ();
 
   encoded_volume_name = ul_util_encode_lvm_name (arg_name, TRUE);
-  size = g_strdup_printf ("%" G_GUINT64_FORMAT "b", arg_size % 512);
+  arg_size -= arg_size % 512;
+
+  size = g_strdup_printf ("%" G_GUINT64_FORMAT "b", arg_size);
 
   job = ul_daemon_launch_spawned_job (daemon, self,
                                       "lvm-vg-create-volume",
@@ -1324,7 +1326,9 @@ handle_create_thin_volume (LvmVolumeGroup *group,
     }
 
   encoded_volume_name = ul_util_encode_lvm_name (arg_name, TRUE);
-  size = g_strdup_printf ("%" G_GUINT64_FORMAT "b", arg_size % 512);
+  arg_size -= arg_size % 512;
+
+  size = g_strdup_printf ("%" G_GUINT64_FORMAT "b", arg_size);
 
   job = ul_daemon_launch_spawned_job (daemon, self,
                                       "lvm-vg-create-volume",
