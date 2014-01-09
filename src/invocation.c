@@ -395,16 +395,19 @@ lookup_invocation_flags (GDBusMethodInvocation *invocation,
   auth_no_user_interaction = FALSE;
 
   /* Find an options, a{sv} */
-  for (i = 0; info->in_args[i] != NULL; i++)
+  if (info->in_args)
     {
-      if (g_str_equal (info->in_args[i]->name, "options") &&
-          g_str_equal (info->in_args[i]->signature, "a{sv}"))
+      for (i = 0; info->in_args[i] != NULL; i++)
         {
-          params = g_dbus_method_invocation_get_parameters (invocation);
-          g_variant_get_child (params, i, "@a{sv}", &options);
-          g_variant_lookup (options, "auth.no_user_interaction", "b",
-                            &auth_no_user_interaction);
-          g_variant_unref (options);
+          if (g_str_equal (info->in_args[i]->name, "options") &&
+              g_str_equal (info->in_args[i]->signature, "a{sv}"))
+            {
+              params = g_dbus_method_invocation_get_parameters (invocation);
+              g_variant_get_child (params, i, "@a{sv}", &options);
+              g_variant_lookup (options, "auth.no_user_interaction", "b",
+                                &auth_no_user_interaction);
+              g_variant_unref (options);
+            }
         }
     }
 
