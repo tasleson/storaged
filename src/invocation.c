@@ -476,7 +476,7 @@ on_authorize_method (GDBusInterfaceSkeleton *instance,
                                                       NULL, /* GCancellable* */
                                                       &error);
 
-  g_object_unref (details);
+  g_clear_object (&details);
 
   if (result == NULL)
     {
