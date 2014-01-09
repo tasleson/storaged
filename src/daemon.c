@@ -676,8 +676,9 @@ ul_daemon_get_jobs (UlDaemon *self)
   objects = g_dbus_object_manager_get_objects (G_DBUS_OBJECT_MANAGER (self->object_manager));
   for (l = objects; l != NULL; l = g_list_next (l))
     {
-      if (UL_IS_JOB (l->data))
-        jobs = g_list_prepend (jobs, g_object_ref (l->data));
+      UlJob *job = UL_JOB (g_dbus_object_get_interface (l->data, "org.freedesktop.UDisks2.Job"));
+      if (job)
+        jobs = g_list_prepend (jobs, job);
     }
   g_list_free_full (objects, g_object_unref);
 
@@ -937,4 +938,3 @@ ul_daemon_unpublish (UlDaemon *self,
 
   g_object_unref (object);
 }
-
