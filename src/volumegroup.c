@@ -98,6 +98,10 @@ ul_volume_group_init (UlVolumeGroup *self)
   self->need_publish = TRUE;
 }
 
+static void update_all_blocks (UlVolumeGroup *self,
+                               GHashTable *new_lvs,
+                               GHashTable *new_pvs);
+
 static void
 ul_volume_group_dispose (GObject *obj)
 {
@@ -113,6 +117,8 @@ ul_volume_group_dispose (GObject *obj)
   while (g_hash_table_iter_next (&iter, NULL, &value))
       g_object_run_dispose (value);
   g_hash_table_remove_all (self->logical_volumes);
+
+  update_all_blocks (self, NULL, NULL);
 
   path = ul_volume_group_get_object_path (self);
   if (path != NULL)
@@ -360,7 +366,7 @@ update_block (UlVolumeGroup *self,
     const gchar *block_lv_name;
 
     device = ul_block_get_udev (block);
-    if (device)
+    if (device && new_lvs)
       {
         block_vg_name = g_udev_device_get_property (device, "DM_VG_NAME");
         block_lv_name = g_udev_device_get_property (device, "DM_LV_NAME");
@@ -374,17 +380,21 @@ update_block (UlVolumeGroup *self,
       }
   }
 
-  pv_info = g_hash_table_lookup (new_pvs, ul_block_get_device (block));
-  if (!pv_info)
+  pv_info = NULL;
+  if (new_pvs)
     {
-      const gchar *const *symlinks;
-      int i;
-      symlinks = ul_block_get_symlinks (block);
-      for (i = 0; symlinks[i]; i++)
+      pv_info = g_hash_table_lookup (new_pvs, ul_block_get_device (block));
+      if (!pv_info)
         {
-          pv_info = g_hash_table_lookup (new_pvs, symlinks[i]);
-          if (pv_info)
-            break;
+          const gchar *const *symlinks;
+          int i;
+          symlinks = ul_block_get_symlinks (block);
+          for (i = 0; symlinks[i]; i++)
+            {
+              pv_info = g_hash_table_lookup (new_pvs, symlinks[i]);
+              if (pv_info)
+                break;
+            }
         }
     }
 
@@ -402,6 +412,22 @@ update_block (UlVolumeGroup *self,
 }
 
 static void
+update_all_blocks (UlVolumeGroup *self,
+                   GHashTable *new_lvs,
+                   GHashTable *new_pvs)
+{
+  GList *blocks, *l;
+  UlDaemon *daemon;
+
+  daemon = ul_daemon_get ();
+
+  blocks = ul_daemon_get_blocks (daemon);
+  for (l = blocks; l != NULL; l = g_list_next (l))
+    update_block (self, l->data, new_lvs, new_pvs);
+  g_list_free_full (blocks, g_object_unref);
+}
+
+static void
 update_with_variant (GPid pid,
                      GVariant *info,
                      GError *error,
@@ -413,7 +439,6 @@ update_with_variant (GPid pid,
   gpointer key, value;
   GHashTable *new_lvs;
   GHashTable *new_pvs;
-  GList *blocks, *l;
   gboolean needs_polling = FALSE;
   UlDaemon *daemon;
   gchar *path;
@@ -510,10 +535,7 @@ update_with_variant (GPid pid,
     }
 
   /* Make sure above is published before updating blocks to point at volume group */
-  blocks = ul_daemon_get_blocks (daemon);
-  for (l = blocks; l != NULL; l = g_list_next (l))
-    update_block (self, l->data, new_lvs, new_pvs);
-  g_list_free_full (blocks, g_object_unref);
+  update_all_blocks (self, new_lvs, new_pvs);
 
   g_hash_table_destroy (new_lvs);
   g_hash_table_destroy (new_pvs);

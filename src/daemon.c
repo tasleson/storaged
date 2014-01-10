@@ -110,9 +110,9 @@ ul_daemon_finalize (GObject *object)
   if (self->name_owner_id)
     g_bus_unown_name (self->name_owner_id);
   g_clear_object (&self->authority);
-  g_object_unref (self->object_manager);
   g_object_unref (self->connection);
   g_object_unref (self->manager);
+  g_object_unref (self->object_manager);
   g_free (self->resource_dir);
 
   ul_invocation_cleanup ();
