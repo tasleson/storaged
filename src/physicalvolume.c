@@ -47,12 +47,12 @@ typedef struct _UlPhysicalVolumeClass   UlPhysicalVolumeClass;
  */
 struct _UlPhysicalVolume
 {
-  UDisksPhysicalVolumeSkeleton parent_instance;
+  LvmPhysicalVolumeBlockSkeleton parent_instance;
 };
 
 struct _UlPhysicalVolumeClass
 {
-  UDisksPhysicalVolumeSkeletonClass parent_class;
+  LvmPhysicalVolumeBlockSkeletonClass parent_class;
 };
 
 static void physical_volume_iface_init (LvmPhysicalVolumeBlockIface *iface);
