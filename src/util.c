@@ -115,7 +115,13 @@ ul_util_lvm_name_is_reserved (const gchar *name)
 static gboolean
 valid_lvm_name_char (gint c)
 {
-  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '+' || c == '_' || c == '.' || c == '-';
+  return ((c >= 'a' && c <= 'z')
+          || (c >= 'A' && c <= 'Z')
+          || (c >= '0' && c <= '9')
+          || c == '+'
+          || c == '_'
+          || c == '.'
+          || c == '-');
 }
 
 #define LVM_ENCODING_PREFIX "+_"
