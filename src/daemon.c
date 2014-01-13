@@ -836,15 +836,11 @@ ul_daemon_publish (UlDaemon *self,
   g_return_if_fail (UL_IS_DAEMON (self));
   g_return_if_fail (path != NULL);
 
-  g_debug ("%spublishing: %s", uniquely ? "uniquely " : "", path);
+  if (G_IS_DBUS_INTERFACE (thing))
+    {
+      g_debug ("%spublishing iface: %s %s", uniquely ? "uniquely " : "", path,
+               g_dbus_interface_get_info(thing)->name);
 
-  if (G_IS_DBUS_OBJECT (thing))
-    {
-      object = g_object_ref (thing);
-      g_dbus_object_skeleton_set_object_path (object, path);
-    }
-  else if (G_IS_DBUS_INTERFACE (thing))
-    {
       object = G_DBUS_OBJECT_SKELETON (g_dbus_object_manager_get_object (G_DBUS_OBJECT_MANAGER (self->object_manager), path));
       if (object != NULL)
         {
@@ -868,7 +864,7 @@ ul_daemon_publish (UlDaemon *self,
     }
   else
     {
-      g_critical ("Unsupported object or interface type to publish: %s", G_OBJECT_TYPE_NAME (thing));
+      g_critical ("Unsupported type to publish: %s", G_OBJECT_TYPE_NAME (thing));
       return;
     }
 
@@ -900,14 +896,12 @@ ul_daemon_unpublish (UlDaemon *self,
     return;
 
   path = g_dbus_object_get_object_path (G_DBUS_OBJECT (object));
-  g_debug ("unpublishing: %s", path);
 
-  if (G_IS_DBUS_OBJECT (thing))
+  if (G_IS_DBUS_INTERFACE (thing))
     {
-      unexport = (G_DBUS_OBJECT (thing) == object);
-    }
-  else if (G_IS_DBUS_INTERFACE (thing))
-    {
+      g_debug ("unpublishing interface: %s %s", path,
+               g_dbus_interface_get_info(thing)->name);
+
       unexport = TRUE;
 
       interfaces = g_dbus_object_get_interfaces (object);
@@ -925,6 +919,9 @@ ul_daemon_unpublish (UlDaemon *self,
        */
       if (!unexport)
         g_dbus_object_skeleton_remove_interface (G_DBUS_OBJECT_SKELETON (object), thing);
+      else
+        g_debug ("(unpublishing object, too)");
+
     }
   else if (thing == NULL)
     {
@@ -932,7 +929,7 @@ ul_daemon_unpublish (UlDaemon *self,
     }
   else
     {
-      g_critical ("Unsupported object or interface type to unpublish: %s", G_OBJECT_TYPE_NAME (thing));
+      g_critical ("Unsupported type to unpublish: %s", G_OBJECT_TYPE_NAME (thing));
     }
 
   if (unexport)
