@@ -64,6 +64,10 @@
     This interface shows up for blocks that are actually activated
     logical volumes. It appears at the same object paths as the blocks
     exposed by udisks via the org.freedesktop.UDisks2.Block interface.
+
+    Explanation: This is separate from the org.freedesktop.UDisks2.LogicalVolume
+    interface because not all logical volumes are 'activated' and as such
+    are not all valid blocks.
   -->
   <interface name="com.redhat.lvm2.LogicalVolumeBlock">
 
