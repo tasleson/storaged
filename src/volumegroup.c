@@ -1058,7 +1058,7 @@ handle_remove_device (LvmVolumeGroup *group,
   data = g_new0 (VolumeGroupRemdevJobData, 1);
   g_variant_lookup (options, "wipe", "b", &data->wipe);
   data->vgname = g_strdup (ul_volume_group_get_name (self));
-  data->vgname = g_strdup (ul_block_get_device (member_device));
+  data->pvname = g_strdup (ul_block_get_device (member_device));
 
   job = ul_daemon_launch_threaded_job (daemon, self,
                                        "lvm-vg-rem-device",
