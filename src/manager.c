@@ -161,17 +161,6 @@ trigger_delayed_lvm_update (UlManager *self)
     g_timeout_add (100, delayed_lvm_update, self);
 }
 
-static void
-do_delayed_lvm_update_now (UlManager *self)
-{
-  if (self->lvm_delayed_update_id > 0)
-    {
-      g_source_remove (self->lvm_delayed_update_id);
-      self->lvm_delayed_update_id = 0;
-      lvm_update (self);
-    }
-}
-
 static gboolean
 is_logical_volume (GUdevDevice *device)
 {
@@ -376,9 +365,8 @@ ul_manager_constructed (GObject *object)
   self->name_to_volume_group = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
                                                       (GDestroyNotify) g_object_unref);
 
-  do_delayed_lvm_update_now (self);
-
   udisks_client_settle (self->udisks_client);
+  lvm_update (self);
 }
 
 static void
