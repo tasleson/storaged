@@ -23,13 +23,13 @@
 
 #include <gio/gio.h>
 
+#include "types.h"
+
 G_BEGIN_DECLS
 
 #define UL_TYPE_SPAWNED_JOB         (ul_spawned_job_get_type ())
 #define UL_SPAWNED_JOB(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_SPAWNED_JOB, UlSpawnedJob))
 #define UL_IS_SPAWNED_JOB(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_SPAWNED_JOB))
-
-typedef struct _UlSpawnedJob UlSpawnedJob;
 
 GType              ul_spawned_job_get_type         (void) G_GNUC_CONST;
 

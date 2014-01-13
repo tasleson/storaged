@@ -45,6 +45,7 @@ BUILT_SOURCES = $(dbus_built_sources)
 noinst_LTLIBRARIES = libudisks-lvm.la
 
 libudisks_lvm_la_SOURCES = \
+	types.h \
 	block.h block.c \
 	daemon.h daemon.c \
 	invocation.h invocation.c \

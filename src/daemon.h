@@ -23,8 +23,7 @@
 
 #include <gio/gio.h>
 
-#include "com.redhat.lvm2.h"
-
+#include "types.h"
 #include "job.h"
 
 G_BEGIN_DECLS
@@ -32,10 +31,6 @@ G_BEGIN_DECLS
 #define UL_TYPE_DAEMON         (ul_daemon_get_type ())
 #define UL_DAEMON(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_DAEMON, UlDaemon))
 #define UL_IS_DAEMON(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_DAEMON))
-
-typedef struct _UlBlock UlBlock;
-typedef struct _UlDaemon UlDaemon;
-typedef struct _UlManager UlManager;
 
 GType                      ul_daemon_get_type            (void) G_GNUC_CONST;
 

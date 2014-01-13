@@ -23,7 +23,7 @@
 
 #include <udisks/udisks.h>
 
-#include "com.redhat.lvm2.h"
+#include "types.h"
 
 G_BEGIN_DECLS
 
@@ -34,7 +34,6 @@ G_BEGIN_DECLS
 #define UL_IS_JOB(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_JOB))
 #define UL_IS_JOB_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE ((k), UL_TYPE_JOB))
 
-typedef struct _UlJob          UlJob;
 typedef struct _UlJobClass     UlJobClass;
 typedef struct _UlJobPrivate   UlJobPrivate;
 

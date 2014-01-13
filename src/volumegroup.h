@@ -21,16 +21,13 @@
 #ifndef __UL_VOLUME_GROUP_H__
 #define __UL_VOLUME_GROUP_H__
 
-#include "com.redhat.lvm2.h"
+#include "types.h"
 
 G_BEGIN_DECLS
 
 #define UL_TYPE_VOLUME_GROUP         (ul_volume_group_get_type ())
 #define UL_VOLUME_GROUP(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_VOLUME_GROUP, UlVolumeGroup))
 #define UL_IS_VOLUME_GROUP(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_VOLUME_GROUP))
-
-typedef struct _UlVolumeGroup UlVolumeGroup;
-typedef struct _UlLogicalVolume UlLogicalVolume;
 
 GType              ul_volume_group_get_type            (void) G_GNUC_CONST;
 

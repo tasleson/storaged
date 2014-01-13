@@ -22,15 +22,13 @@
 #ifndef __UL_LOGICAL_VOLUME_H__
 #define __UL_LOGICAL_VOLUME_H__
 
-#include "volumegroup.h"
+#include "types.h"
 
 G_BEGIN_DECLS
 
 #define UL_TYPE_LOGICAL_VOLUME         (ul_logical_volume_get_type ())
 #define UL_LOGICAL_VOLUME(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_LOGICAL_VOLUME, UlLogicalVolume))
 #define UL_IS_LOGICAL_VOLUME(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_LOGICAL_VOLUME))
-
-typedef struct _UlLogicalVolume UlLogicalVolume;
 
 GType                ul_logical_volume_get_type         (void) G_GNUC_CONST;
 

@@ -18,27 +18,23 @@
  *
  */
 
-#ifndef __UL_THREADED_JOB_H__
-#define __UL_THREADED_JOB_H__
+#ifndef __UL_TYPES_H__
+#define __UL_TYPES_H__
 
-#include "types.h"
-#include "job.h"
+#include "com.redhat.lvm2.h"
 
 G_BEGIN_DECLS
 
-#define UL_TYPE_THREADED_JOB         (ul_threaded_job_get_type ())
-#define UL_THREADED_JOB(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_THREADED_JOB, UlThreadedJob))
-#define UL_IS_THREADED_JOB(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_THREADED_JOB))
-
-GType             ul_threaded_job_get_type         (void) G_GNUC_CONST;
-
-UlThreadedJob *   ul_threaded_job_new              (UlJobFunc job_func,
-                                                    gpointer user_data,
-                                                    GDestroyNotify user_data_free_func,
-                                                    GCancellable *cancellable);
-
-gpointer          ul_threaded_job_get_user_data    (UlThreadedJob *job);
+typedef struct _UlBlock          UlBlock;
+typedef struct _UlLogicalVolume  UlLogicalVolume;
+typedef struct _UlPhysicalVolume UlPhysicalVolume;
+typedef struct _UlVolumeGroup    UlVolumeGroup;
+typedef struct _UlDaemon         UlDaemon;
+typedef struct _UlManager        UlManager;
+typedef struct _UlJob            UlJob;
+typedef struct _UlSpawnedJob     UlSpawnedJob;
+typedef struct _UlThreadedJob    UlThreadedJob;
 
 G_END_DECLS
 
-#endif /* __UL_THREADED_JOB_H__ */
+#endif /* __UL_DAEMON_H__ */

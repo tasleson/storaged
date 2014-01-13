@@ -25,8 +25,7 @@
 
 #include <gudev/gudev.h>
 
-#include "daemon.h"
-#include "volumegroup.h"
+#include "types.h"
 
 G_BEGIN_DECLS
 
