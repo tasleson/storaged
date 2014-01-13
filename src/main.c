@@ -65,6 +65,7 @@ on_bus_acquired (GObject *source,
                               "connection", connection,
                               "resource-dir", opt_resources,
                               "replace-name", opt_replace,
+                              "persist", opt_debug,
                               NULL);
 
       g_signal_connect_swapped (*daemon, "finished",

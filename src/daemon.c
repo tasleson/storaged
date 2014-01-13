@@ -244,7 +244,7 @@ on_client_disappeared (const gchar *bus_name,
       g_info ("Last client went away: %s", bus_name);
 
       /* When last client, force release of name */
-      if (self->name_owner_id)
+      if (!self->persist && self->name_owner_id)
         {
           g_bus_unown_name (self->name_owner_id);
           self->name_owner_id = 0;
