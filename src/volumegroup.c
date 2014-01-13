@@ -260,17 +260,7 @@ lv_is_pvmove_volume (const gchar *name)
 static gboolean
 lv_is_visible (const gchar *name)
 {
-  /* XXX - get this from lvm2app */
-
-  return (name
-          && strstr (name, "_mlog") == NULL
-          && strstr (name, "_mimage") == NULL
-          && strstr (name, "_rimage") == NULL
-          && strstr (name, "_rmeta") == NULL
-          && strstr (name, "_tdata") == NULL
-          && strstr (name, "_tmeta") == NULL
-          && !g_str_has_prefix (name, "pvmove")
-          && !g_str_has_prefix (name, "snapshot"));
+  return name && !ul_util_lvm_name_is_reserved (name);
 }
 
 static void

@@ -96,6 +96,22 @@ ul_util_build_object_path (const gchar *base,
   return g_string_free (path, FALSE);
 }
 
+gboolean
+ul_util_lvm_name_is_reserved (const gchar *name)
+{
+  /* XXX - get this from lvm2app */
+
+  return (strstr (name, "_mlog")
+          || strstr (name, "_mimage")
+          || strstr (name, "_rimage")
+          || strstr (name, "_rmeta")
+          || strstr (name, "_tdata")
+          || strstr (name, "_tmeta")
+          || strstr (name, "_pmspare")
+          || g_str_has_prefix (name, "pvmove")
+          || g_str_has_prefix (name, "snapshot"));
+}
+
 static gboolean
 valid_lvm_name_char (gint c)
 {
@@ -124,15 +140,7 @@ ul_util_encode_lvm_name (const gchar *name,
   if (g_str_has_prefix (name, LVM_ENCODING_PREFIX))
     goto encode;
 
-  if (for_logical_volume
-      && (strstr (name, "_mlog")
-          || strstr (name, "_mimage")
-          || strstr (name, "_rimage")
-          || strstr (name, "_rmeta")
-          || strstr (name, "_tdata")
-          || strstr (name, "_tmeta")
-          || g_str_has_prefix (name, "pvmove")
-          || g_str_has_prefix (name, "snapshot")))
+  if (for_logical_volume && ul_util_lvm_name_is_reserved (name))
     goto encode;
 
   return g_strdup (name);
