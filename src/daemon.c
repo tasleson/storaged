@@ -107,8 +107,6 @@ ul_daemon_finalize (GObject *object)
 {
   UlDaemon *self = UL_DAEMON (object);
 
-  default_daemon = NULL;
-
   if (self->name_owner_id)
     g_bus_unown_name (self->name_owner_id);
   g_clear_object (&self->authority);
@@ -120,6 +118,8 @@ ul_daemon_finalize (GObject *object)
   ul_invocation_cleanup ();
 
   G_OBJECT_CLASS (ul_daemon_parent_class)->finalize (object);
+
+  default_daemon = NULL;
 }
 
 static void
