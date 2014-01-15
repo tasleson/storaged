@@ -29,85 +29,85 @@
 #include <glib/gi18n-lib.h>
 
 /**
- * SECTION:udiskslinuxphysicalvolume
- * @title: UlPhysicalVolume
+ * SECTION:storagephysicalvolume
+ * @title: StoragePhysicalVolume
  * @short_description: Linux implementation of #LvmPhysicalVolumeBlock
  *
  * This type provides an implementation of the #LvmPhysicalVolumeBlock
  * interface on Linux.
  */
 
-typedef struct _UlPhysicalVolumeClass   UlPhysicalVolumeClass;
+typedef struct _StoragePhysicalVolumeClass   StoragePhysicalVolumeClass;
 
 /**
- * UlPhysicalVolume:
+ * StoragePhysicalVolume:
  *
- * The #UlPhysicalVolume structure contains only private data and should
+ * The #StoragePhysicalVolume structure contains only private data and should
  * only be accessed using the provided API.
  */
-struct _UlPhysicalVolume
+struct _StoragePhysicalVolume
 {
   LvmPhysicalVolumeBlockSkeleton parent_instance;
 };
 
-struct _UlPhysicalVolumeClass
+struct _StoragePhysicalVolumeClass
 {
   LvmPhysicalVolumeBlockSkeletonClass parent_class;
 };
 
 static void physical_volume_iface_init (LvmPhysicalVolumeBlockIface *iface);
 
-G_DEFINE_TYPE_WITH_CODE (UlPhysicalVolume, ul_physical_volume,
+G_DEFINE_TYPE_WITH_CODE (StoragePhysicalVolume, storage_physical_volume,
                          LVM_TYPE_PHYSICAL_VOLUME_BLOCK_SKELETON,
                          G_IMPLEMENT_INTERFACE (LVM_TYPE_PHYSICAL_VOLUME_BLOCK, physical_volume_iface_init));
 
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
-ul_physical_volume_init (UlPhysicalVolume *self)
+storage_physical_volume_init (StoragePhysicalVolume *self)
 {
 
 }
 
 static void
-ul_physical_volume_class_init (UlPhysicalVolumeClass *klass)
+storage_physical_volume_class_init (StoragePhysicalVolumeClass *klass)
 {
 
 }
 
 /**
- * ul_physical_volume_new:
+ * storage_physical_volume_new:
  *
- * Creates a new #UlPhysicalVolume instance.
+ * Creates a new #StoragePhysicalVolume instance.
  *
- * Returns: A new #UlPhysicalVolume. Free with g_object_unref().
+ * Returns: A new #StoragePhysicalVolume. Free with g_object_unref().
  */
-UlPhysicalVolume *
-ul_physical_volume_new (void)
+StoragePhysicalVolume *
+storage_physical_volume_new (void)
 {
-  return g_object_new (UL_TYPE_PHYSICAL_VOLUME, NULL);
+  return g_object_new (STORAGE_TYPE_PHYSICAL_VOLUME, NULL);
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
 
 /**
- * ul_physical_volume_update:
- * @physical_volume: A #UlPhysicalVolume.
- * @object: The enclosing #UlBlockObject instance.
+ * storage_physical_volume_update:
+ * @physical_volume: A #StoragePhysicalVolume.
+ * @object: The enclosing #StorageBlockObject instance.
  *
  * Updates the interface.
  */
 void
-ul_physical_volume_update (UlPhysicalVolume *self,
-                           UlVolumeGroup *group,
-                           GVariant *info)
+storage_physical_volume_update (StoragePhysicalVolume *self,
+                                StorageVolumeGroup *group,
+                                GVariant *info)
 {
   LvmPhysicalVolumeBlock *iface;
   guint64 num;
 
   iface = LVM_PHYSICAL_VOLUME_BLOCK (self);
 
-  lvm_physical_volume_block_set_volume_group (iface, ul_volume_group_get_object_path (group));
+  lvm_physical_volume_block_set_volume_group (iface, storage_volume_group_get_object_path (group));
 
   if (g_variant_lookup (info, "size", "t", &num))
     lvm_physical_volume_block_set_size (iface, num);

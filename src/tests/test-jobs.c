@@ -153,10 +153,10 @@ assert_signal_received_run (gpointer object,
 static void
 test_spawned_job_successful (void)
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   const gchar *argv[] = { "/bin/true", NULL };
 
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
+  job = storage_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_success), NULL);
   g_object_unref (job);
 }
@@ -166,10 +166,10 @@ test_spawned_job_successful (void)
 static void
 test_spawned_job_failure (void)
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   const gchar *argv[] = { "/bin/false", NULL };
 
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
+  job = storage_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
                           (gpointer) "/bin/false exited with non-zero exit status 1");
   g_object_unref (job);
@@ -180,10 +180,10 @@ test_spawned_job_failure (void)
 static void
 test_spawned_job_missing_program (void)
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   const gchar *argv[] = { "/path/to/unknown/file", NULL };
 
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
+  job = storage_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
                           (gpointer) "Error spawning command-line `/path/to/unknown/file': Failed to execute child process \"/path/to/unknown/file\" (No such file or directory) (g-exec-error-quark, 8)");
   g_object_unref (job);
@@ -194,13 +194,13 @@ test_spawned_job_missing_program (void)
 static void
 test_spawned_job_cancelled_at_start (void)
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   GCancellable *cancellable;
   const gchar *argv[] = { "/bin/true", NULL };
 
   cancellable = g_cancellable_new ();
   g_cancellable_cancel (cancellable);
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), cancellable);
+  job = storage_spawned_job_new (argv, NULL, getuid (), geteuid (), cancellable);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
                           (gpointer) "Operation was cancelled (g-io-error-quark, 19)");
   g_object_unref (job);
@@ -221,12 +221,12 @@ on_timeout (gpointer user_data)
 static void
 test_spawned_job_cancelled_midway (void)
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   GCancellable *cancellable;
   const gchar *argv[] = { "/bin/sleep 0.5", NULL };
 
   cancellable = g_cancellable_new ();
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), cancellable);
+  job = storage_spawned_job_new (argv, NULL, getuid (), geteuid (), cancellable);
   g_timeout_add (10, on_timeout, cancellable); /* 10 msec */
   g_main_loop_run (loop);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
@@ -238,7 +238,7 @@ test_spawned_job_cancelled_midway (void)
 /* ---------------------------------------------------------------------------------------------------- */
 
 static gboolean
-on_spawned_job_completed (UlSpawnedJob *job,
+on_spawned_job_completed (StorageSpawnedJob *job,
                           GError *error,
                           gint status,
                           GString *standard_output,
@@ -255,11 +255,11 @@ on_spawned_job_completed (UlSpawnedJob *job,
 static void
 test_spawned_job_override_signal_handler (void)
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   gboolean handler_ran;
   const gchar *argv[] = { "/path/to/unknown/file", NULL };
 
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL /* GCancellable */);
+  job = storage_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL /* GCancellable */);
   handler_ran = FALSE;
   g_signal_connect (job, "spawned-job-completed", G_CALLBACK (on_spawned_job_completed), &handler_ran);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
@@ -273,17 +273,17 @@ test_spawned_job_override_signal_handler (void)
 static void
 test_spawned_job_premature_termination (void)
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   const gchar *argv[] = { "/bin/sleep", "1000", NULL };
 
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL /* GCancellable */);
+  job = storage_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL /* GCancellable */);
   g_object_unref (job);
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
 
 static gboolean
-read_stdout_on_spawned_job_completed (UlSpawnedJob *job,
+read_stdout_on_spawned_job_completed (StorageSpawnedJob *job,
                                       GError *error,
                                       gint status,
                                       GString *standard_output,
@@ -303,10 +303,10 @@ read_stdout_on_spawned_job_completed (UlSpawnedJob *job,
 static void
 test_spawned_job_read_stdout (void)
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   const gchar *argv[] = { BUILDDIR "/src/tests/frob-helper", "0", NULL };
 
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
+  job = storage_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "spawned-job-completed", G_CALLBACK (read_stdout_on_spawned_job_completed), NULL);
   g_object_unref (job);
 }
@@ -314,7 +314,7 @@ test_spawned_job_read_stdout (void)
 /* ---------------------------------------------------------------------------------------------------- */
 
 static gboolean
-read_stderr_on_spawned_job_completed (UlSpawnedJob *job,
+read_stderr_on_spawned_job_completed (StorageSpawnedJob *job,
                                       GError *error,
                                       gint status,
                                       GString *standard_output,
@@ -334,10 +334,10 @@ read_stderr_on_spawned_job_completed (UlSpawnedJob *job,
 static void
 test_spawned_job_read_stderr (void)
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   const gchar *argv[] = { BUILDDIR "/src/tests/frob-helper", "1", NULL };
 
-  job = ul_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
+  job = storage_spawned_job_new (argv, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "spawned-job-completed", G_CALLBACK (read_stderr_on_spawned_job_completed), NULL);
   g_object_unref (job);
 }
@@ -345,7 +345,7 @@ test_spawned_job_read_stderr (void)
 /* ---------------------------------------------------------------------------------------------------- */
 
 static gboolean
-exit_status_on_spawned_job_completed (UlSpawnedJob *job,
+exit_status_on_spawned_job_completed (StorageSpawnedJob *job,
                                       GError *error,
                                       gint status,
                                       GString *standard_output,
@@ -363,16 +363,16 @@ exit_status_on_spawned_job_completed (UlSpawnedJob *job,
 static void
 test_spawned_job_exit_status (void)
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   const gchar *argv2[] = { BUILDDIR "/src/tests/frob-helper", "2", NULL };
   const gchar *argv3[] = { BUILDDIR "/src/tests/frob-helper", "3", NULL };
 
-  job = ul_spawned_job_new (argv2, NULL, getuid (), geteuid (), NULL);
+  job = storage_spawned_job_new (argv2, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "spawned-job-completed", G_CALLBACK (exit_status_on_spawned_job_completed),
                           GINT_TO_POINTER (1));
   g_object_unref (job);
 
-  job = ul_spawned_job_new (argv3, NULL, getuid (), geteuid (), NULL);
+  job = storage_spawned_job_new (argv3, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "spawned-job-completed", G_CALLBACK (exit_status_on_spawned_job_completed),
                           GINT_TO_POINTER (2));
   g_object_unref (job);
@@ -383,17 +383,17 @@ test_spawned_job_exit_status (void)
 static void
 test_spawned_job_abnormal_termination (void)
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   const gchar *argv4[] = { BUILDDIR "/src/tests/frob-helper", "4", NULL };
   const gchar *argv5[] = { BUILDDIR "/src/tests/frob-helper", "5", NULL };
 
-  job = ul_spawned_job_new (argv4, NULL, getuid (), geteuid (), NULL);
+  job = storage_spawned_job_new (argv4, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
                           (gpointer) BUILDDIR "/src/tests/frob-helper was signaled with signal SIGSEGV (11): "
                           "OK, deliberately causing a segfault\n");
   g_object_unref (job);
 
-  job = ul_spawned_job_new (argv5, NULL, getuid (), geteuid (), NULL);
+  job = storage_spawned_job_new (argv5, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
                              (gpointer) BUILDDIR "/src/tests/frob-helper was signaled with signal SIGABRT (6): "
                                  "OK, deliberately abort()'ing\n");
@@ -403,7 +403,7 @@ test_spawned_job_abnormal_termination (void)
 /* ---------------------------------------------------------------------------------------------------- */
 
 static gboolean
-binary_output_on_spawned_job_completed (UlSpawnedJob *job,
+binary_output_on_spawned_job_completed (StorageSpawnedJob *job,
                                         GError *error,
                                         gint status,
                                         GString *standard_output,
@@ -429,10 +429,10 @@ binary_output_on_spawned_job_completed (UlSpawnedJob *job,
 static void
 test_spawned_job_binary_output (void)
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   const gchar *argv6[] = { BUILDDIR "/src/tests/frob-helper", "6", NULL };
 
-  job = ul_spawned_job_new (argv6, NULL, getuid (), geteuid (), NULL);
+  job = storage_spawned_job_new (argv6, NULL, getuid (), geteuid (), NULL);
   assert_signal_received (job, "spawned-job-completed", G_CALLBACK (binary_output_on_spawned_job_completed), NULL);
   g_object_unref (job);
 }
@@ -440,7 +440,7 @@ test_spawned_job_binary_output (void)
 /* ---------------------------------------------------------------------------------------------------- */
 
 static gboolean
-input_string_on_spawned_job_completed (UlSpawnedJob *job,
+input_string_on_spawned_job_completed (StorageSpawnedJob *job,
                                        GError *error,
                                        gint status,
                                        GString *standard_output,
@@ -458,10 +458,10 @@ input_string_on_spawned_job_completed (UlSpawnedJob *job,
 static void
 test_spawned_job_input_string (void)
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   const gchar *argv7[] = { BUILDDIR "/src/tests/frob-helper", "7", NULL };
 
-  job = ul_spawned_job_new (argv7, "foobar", getuid (), geteuid (), NULL);
+  job = storage_spawned_job_new (argv7, "foobar", getuid (), geteuid (), NULL);
   assert_signal_received (job, "spawned-job-completed", G_CALLBACK (input_string_on_spawned_job_completed), NULL);
   g_object_unref (job);
 }
@@ -480,9 +480,9 @@ threaded_job_successful_func (GCancellable *cancellable,
 static void
 test_threaded_job_successful (void)
 {
-  UlThreadedJob *job;
+  StorageThreadedJob *job;
 
-  job = ul_threaded_job_new (threaded_job_successful_func, NULL, NULL, NULL);
+  job = storage_threaded_job_new (threaded_job_successful_func, NULL, NULL, NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_success), NULL);
   g_object_unref (job);
 }
@@ -505,9 +505,9 @@ threaded_job_failure_func (GCancellable *cancellable,
 static void
 test_threaded_job_failure (void)
 {
-  UlThreadedJob *job;
+  StorageThreadedJob *job;
 
-  job = ul_threaded_job_new (threaded_job_failure_func, NULL, NULL, NULL);
+  job = storage_threaded_job_new (threaded_job_failure_func, NULL, NULL, NULL);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
                           (gpointer) "Threaded job failed with error: some error (g-key-file-error-quark, 5)");
   g_object_unref (job);
@@ -518,12 +518,12 @@ test_threaded_job_failure (void)
 static void
 test_threaded_job_cancelled_at_start (void)
 {
-  UlThreadedJob *job;
+  StorageThreadedJob *job;
   GCancellable *cancellable;
 
   cancellable = g_cancellable_new ();
   g_cancellable_cancel (cancellable);
-  job = ul_threaded_job_new (threaded_job_successful_func, NULL, NULL, cancellable);
+  job = storage_threaded_job_new (threaded_job_successful_func, NULL, NULL, cancellable);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
                           (gpointer) "Threaded job failed with error: Operation was cancelled (g-io-error-quark, 19)");
   g_object_unref (job);
@@ -555,13 +555,13 @@ threaded_job_sleep_until_cancelled (GCancellable *cancellable,
 static void
 test_threaded_job_cancelled_midway (void)
 {
-  UlThreadedJob *job;
+  StorageThreadedJob *job;
   GCancellable *cancellable;
   gint count;
 
   cancellable = g_cancellable_new ();
   count = 0;
-  job = ul_threaded_job_new (threaded_job_sleep_until_cancelled, &count, NULL, cancellable);
+  job = storage_threaded_job_new (threaded_job_sleep_until_cancelled, &count, NULL, cancellable);
   g_timeout_add (10, on_timeout, cancellable); /* 10 msec */
   g_main_loop_run (loop);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
@@ -574,7 +574,7 @@ test_threaded_job_cancelled_midway (void)
 /* ---------------------------------------------------------------------------------------------------- */
 
 static gboolean
-on_threaded_job_completed (UlThreadedJob  *job,
+on_threaded_job_completed (StorageThreadedJob  *job,
                            gboolean            result,
                            GError             *error,
                            gpointer            user_data)
@@ -591,10 +591,10 @@ on_threaded_job_completed (UlThreadedJob  *job,
 static void
 test_threaded_job_override_signal_handler (void)
 {
-  UlThreadedJob *job;
+  StorageThreadedJob *job;
   gboolean handler_ran;
 
-  job = ul_threaded_job_new (threaded_job_failure_func, NULL, NULL, NULL);
+  job = storage_threaded_job_new (threaded_job_failure_func, NULL, NULL, NULL);
   handler_ran = FALSE;
   g_signal_connect (job, "threaded-job-completed", G_CALLBACK (on_threaded_job_completed), &handler_ran);
   assert_signal_received (job, "completed", G_CALLBACK (on_completed_expect_failure),
@@ -620,24 +620,24 @@ main (int    argc,
   loop = g_main_loop_new (NULL, FALSE);
   main_thread = g_thread_self ();
 
-  g_test_add_func ("/udisks/lvm/spawned-job/successful", test_spawned_job_successful);
-  g_test_add_func ("/udisks/lvm/spawned-job/failure", test_spawned_job_failure);
-  g_test_add_func ("/udisks/lvm/spawned-job/missing-program", test_spawned_job_missing_program);
-  g_test_add_func ("/udisks/lvm/spawned-job/cancelled-at-start", test_spawned_job_cancelled_at_start);
-  g_test_add_func ("/udisks/lvm/spawned-job/cancelled-midway", test_spawned_job_cancelled_midway);
-  g_test_add_func ("/udisks/lvm/spawned-job/override-signal-handler", test_spawned_job_override_signal_handler);
-  g_test_add_func ("/udisks/lvm/spawned-job/premature-termination", test_spawned_job_premature_termination);
-  g_test_add_func ("/udisks/lvm/spawned-job/read-stdout", test_spawned_job_read_stdout);
-  g_test_add_func ("/udisks/lvm/spawned-job/read-stderr", test_spawned_job_read_stderr);
-  g_test_add_func ("/udisks/lvm/spawned-job/exit-status", test_spawned_job_exit_status);
-  g_test_add_func ("/udisks/lvm/spawned-job/abnormal-termination", test_spawned_job_abnormal_termination);
-  g_test_add_func ("/udisks/lvm/spawned-job/binary-output", test_spawned_job_binary_output);
-  g_test_add_func ("/udisks/lvm/spawned-job/input-string", test_spawned_job_input_string);
-  g_test_add_func ("/udisks/lvm/threaded-job/successful", test_threaded_job_successful);
-  g_test_add_func ("/udisks/lvm/threaded-job/failure", test_threaded_job_failure);
-  g_test_add_func ("/udisks/lvm/threaded-job/cancelled-at-start", test_threaded_job_cancelled_at_start);
-  g_test_add_func ("/udisks/lvm/threaded-job/cancelled-midway", test_threaded_job_cancelled_midway);
-  g_test_add_func ("/udisks/lvm/threaded-job/override-signal-handler", test_threaded_job_override_signal_handler);
+  g_test_add_func ("/storaged/spawned-job/successful", test_spawned_job_successful);
+  g_test_add_func ("/storaged/spawned-job/failure", test_spawned_job_failure);
+  g_test_add_func ("/storaged/spawned-job/missing-program", test_spawned_job_missing_program);
+  g_test_add_func ("/storaged/spawned-job/cancelled-at-start", test_spawned_job_cancelled_at_start);
+  g_test_add_func ("/storaged/spawned-job/cancelled-midway", test_spawned_job_cancelled_midway);
+  g_test_add_func ("/storaged/spawned-job/override-signal-handler", test_spawned_job_override_signal_handler);
+  g_test_add_func ("/storaged/spawned-job/premature-termination", test_spawned_job_premature_termination);
+  g_test_add_func ("/storaged/spawned-job/read-stdout", test_spawned_job_read_stdout);
+  g_test_add_func ("/storaged/spawned-job/read-stderr", test_spawned_job_read_stderr);
+  g_test_add_func ("/storaged/spawned-job/exit-status", test_spawned_job_exit_status);
+  g_test_add_func ("/storaged/spawned-job/abnormal-termination", test_spawned_job_abnormal_termination);
+  g_test_add_func ("/storaged/spawned-job/binary-output", test_spawned_job_binary_output);
+  g_test_add_func ("/storaged/spawned-job/input-string", test_spawned_job_input_string);
+  g_test_add_func ("/storaged/threaded-job/successful", test_threaded_job_successful);
+  g_test_add_func ("/storaged/threaded-job/failure", test_threaded_job_failure);
+  g_test_add_func ("/storaged/threaded-job/cancelled-at-start", test_threaded_job_cancelled_at_start);
+  g_test_add_func ("/storaged/threaded-job/cancelled-midway", test_threaded_job_cancelled_midway);
+  g_test_add_func ("/storaged/threaded-job/override-signal-handler", test_threaded_job_override_signal_handler);
 
   ret = g_test_run();
 

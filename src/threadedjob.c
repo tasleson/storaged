@@ -29,27 +29,27 @@
 #include <sys/wait.h>
 
 /**
- * SECTION:udisksthreadedjob
- * @title: UlThreadedJob
+ * SECTION:storagethreadedjob
+ * @title: StorageThreadedJob
  * @short_description: Job that runs in a thread
  *
  * This type provides an implementation of the #UDisksJob interface
  * for jobs that run in a thread.
  */
 
-typedef struct _UlThreadedJobClass   UlThreadedJobClass;
+typedef struct _StorageThreadedJobClass   StorageThreadedJobClass;
 
 /**
- * UlThreadedJob:
+ * StorageThreadedJob:
  *
- * The #UlThreadedJob structure contains only private data and should
+ * The #StorageThreadedJob structure contains only private data and should
  * only be accessed using the provided API.
  */
-struct _UlThreadedJob
+struct _StorageThreadedJob
 {
-  UlJob parent_instance;
+  StorageJob parent_instance;
 
-  UlJobFunc job_func;
+  StorageJobFunc job_func;
   gpointer user_data;
   GDestroyNotify user_data_free_func;
 
@@ -57,11 +57,11 @@ struct _UlThreadedJob
   GError *job_error;
 };
 
-struct _UlThreadedJobClass
+struct _StorageThreadedJobClass
 {
-  UlJobClass parent_class;
+  StorageJobClass parent_class;
 
-  gboolean (* threaded_job_completed) (UlThreadedJob *job,
+  gboolean (* threaded_job_completed) (StorageThreadedJob *job,
                                        gboolean result,
                                        GError *error);
 };
@@ -84,18 +84,18 @@ enum
 
 static gulong signals[LAST_SIGNAL] = { 0 };
 
-static gboolean ul_threaded_job_threaded_job_completed_default (UlThreadedJob *job,
-                                                                    gboolean result,
-                                                                    GError *error);
+static gboolean storage_threaded_job_threaded_job_completed_default (StorageThreadedJob *job,
+                                                                     gboolean result,
+                                                                     GError *error);
 
-G_DEFINE_TYPE_WITH_CODE (UlThreadedJob, ul_threaded_job, UL_TYPE_JOB,
+G_DEFINE_TYPE_WITH_CODE (StorageThreadedJob, storage_threaded_job, STORAGE_TYPE_JOB,
                          G_IMPLEMENT_INTERFACE (UDISKS_TYPE_JOB, job_iface_init)
 );
 
 static void
-ul_threaded_job_finalize (GObject *object)
+storage_threaded_job_finalize (GObject *object)
 {
-  UlThreadedJob *job = UL_THREADED_JOB (object);
+  StorageThreadedJob *job = STORAGE_THREADED_JOB (object);
 
   if (job->job_error != NULL)
     g_error_free (job->job_error);
@@ -103,16 +103,16 @@ ul_threaded_job_finalize (GObject *object)
   if (job->user_data_free_func != NULL)
     job->user_data_free_func (job->user_data);
 
-  G_OBJECT_CLASS (ul_threaded_job_parent_class)->finalize (object);
+  G_OBJECT_CLASS (storage_threaded_job_parent_class)->finalize (object);
 }
 
 static void
-ul_threaded_job_get_property (GObject *object,
-                              guint prop_id,
-                              GValue *value,
-                              GParamSpec *pspec)
+storage_threaded_job_get_property (GObject *object,
+                                   guint prop_id,
+                                   GValue *value,
+                                   GParamSpec *pspec)
 {
-  UlThreadedJob *job = UL_THREADED_JOB (object);
+  StorageThreadedJob *job = STORAGE_THREADED_JOB (object);
 
   switch (prop_id)
     {
@@ -135,12 +135,12 @@ ul_threaded_job_get_property (GObject *object,
 }
 
 static void
-ul_threaded_job_set_property (GObject *object,
-                              guint prop_id,
-                              const GValue *value,
-                              GParamSpec *pspec)
+storage_threaded_job_set_property (GObject *object,
+                                   guint prop_id,
+                                   const GValue *value,
+                                   GParamSpec *pspec)
 {
-  UlThreadedJob *job = UL_THREADED_JOB (object);
+  StorageThreadedJob *job = STORAGE_THREADED_JOB (object);
 
   switch (prop_id)
     {
@@ -170,7 +170,7 @@ ul_threaded_job_set_property (GObject *object,
 static gboolean
 job_complete (gpointer user_data)
 {
-  UlThreadedJob *job = UL_THREADED_JOB (user_data);
+  StorageThreadedJob *job = STORAGE_THREADED_JOB (user_data);
   gboolean ret;
 
   /* take a reference so it's safe for a signal-handler to release the last one */
@@ -186,11 +186,11 @@ job_complete (gpointer user_data)
 }
 
 static gboolean
-run_io_scheduler_job (GIOSchedulerJob  *io_scheduler_job,
-                      GCancellable     *cancellable,
-                      gpointer          user_data)
+run_io_scheduler_job (GIOSchedulerJob *io_scheduler_job,
+                      GCancellable *cancellable,
+                      gpointer user_data)
 {
-  UlThreadedJob *job = UL_THREADED_JOB (user_data);
+  StorageThreadedJob *job = STORAGE_THREADED_JOB (user_data);
 
   /* TODO: probably want to create a GMainContext dedicated to the thread */
 
@@ -213,42 +213,42 @@ run_io_scheduler_job (GIOSchedulerJob  *io_scheduler_job,
 }
 
 static void
-ul_threaded_job_constructed (GObject *object)
+storage_threaded_job_constructed (GObject *object)
 {
-  UlThreadedJob *job = UL_THREADED_JOB (object);
+  StorageThreadedJob *job = STORAGE_THREADED_JOB (object);
 
-  if (G_OBJECT_CLASS (ul_threaded_job_parent_class)->constructed != NULL)
-    G_OBJECT_CLASS (ul_threaded_job_parent_class)->constructed (object);
+  if (G_OBJECT_CLASS (storage_threaded_job_parent_class)->constructed != NULL)
+    G_OBJECT_CLASS (storage_threaded_job_parent_class)->constructed (object);
 
   g_assert (g_thread_supported ());
   g_io_scheduler_push_job (run_io_scheduler_job, job, NULL, G_PRIORITY_DEFAULT,
-                           ul_job_get_cancellable (UL_JOB (job)));
+                           storage_job_get_cancellable (STORAGE_JOB (job)));
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
-ul_threaded_job_init (UlThreadedJob *job)
+storage_threaded_job_init (StorageThreadedJob *job)
 {
 }
 
 static void
-ul_threaded_job_class_init (UlThreadedJobClass *klass)
+storage_threaded_job_class_init (StorageThreadedJobClass *klass)
 {
   GObjectClass *gobject_class;
 
-  klass->threaded_job_completed = ul_threaded_job_threaded_job_completed_default;
+  klass->threaded_job_completed = storage_threaded_job_threaded_job_completed_default;
 
   gobject_class = G_OBJECT_CLASS (klass);
-  gobject_class->finalize     = ul_threaded_job_finalize;
-  gobject_class->constructed  = ul_threaded_job_constructed;
-  gobject_class->set_property = ul_threaded_job_set_property;
-  gobject_class->get_property = ul_threaded_job_get_property;
+  gobject_class->finalize     = storage_threaded_job_finalize;
+  gobject_class->constructed  = storage_threaded_job_constructed;
+  gobject_class->set_property = storage_threaded_job_set_property;
+  gobject_class->get_property = storage_threaded_job_get_property;
 
   /**
-   * UlThreadedJob:job-func:
+   * StorageThreadedJob:job-func:
    *
-   * The #UlThreadedJobFunc to use.
+   * The #StorageThreadedJobFunc to use.
    */
   g_object_class_install_property (gobject_class,
                                    PROP_JOB_FUNC,
@@ -261,9 +261,9 @@ ul_threaded_job_class_init (UlThreadedJobClass *klass)
                                                          G_PARAM_STATIC_STRINGS));
 
   /**
-   * UlThreadedJob:user-data:
+   * StorageThreadedJob:user-data:
    *
-   * User data for the #UlThreadedJobFunc.
+   * User data for the #StorageThreadedJobFunc.
    */
   g_object_class_install_property (gobject_class,
                                    PROP_USER_DATA,
@@ -276,9 +276,9 @@ ul_threaded_job_class_init (UlThreadedJobClass *klass)
                                                          G_PARAM_STATIC_STRINGS));
 
   /**
-   * UlThreadedJob:user-data-free-func:
+   * StorageThreadedJob:user-data-free-func:
    *
-   * Free function for user data for the #UlThreadedJobFunc.
+   * Free function for user data for the #StorageThreadedJobFunc.
    */
   g_object_class_install_property (gobject_class,
                                    PROP_USER_DATA_FREE_FUNC,
@@ -291,10 +291,10 @@ ul_threaded_job_class_init (UlThreadedJobClass *klass)
                                                          G_PARAM_STATIC_STRINGS));
 
   /**
-   * UlThreadedJob::threaded-job-completed:
-   * @job: The #UlThreadedJob emitting the signal.
-   * @result: The #gboolean returned by the #UlThreadedJobFunc.
-   * @error: The #GError set by the #UlThreadedJobFunc.
+   * StorageThreadedJob::threaded-job-completed:
+   * @job: The #StorageThreadedJob emitting the signal.
+   * @result: The #gboolean returned by the #StorageThreadedJobFunc.
+   * @error: The #GError set by the #StorageThreadedJobFunc.
    *
    * Emitted when the threaded job is complete.
    *
@@ -313,9 +313,9 @@ ul_threaded_job_class_init (UlThreadedJobClass *klass)
    */
   signals[THREADED_JOB_COMPLETED_SIGNAL] =
     g_signal_new ("threaded-job-completed",
-                  UL_TYPE_THREADED_JOB,
+                  STORAGE_TYPE_THREADED_JOB,
                   G_SIGNAL_RUN_LAST,
-                  G_STRUCT_OFFSET (UlThreadedJobClass, threaded_job_completed),
+                  G_STRUCT_OFFSET (StorageThreadedJobClass, threaded_job_completed),
                   g_signal_accumulator_true_handled,
                   NULL,
                   g_cclosure_marshal_generic,
@@ -326,29 +326,29 @@ ul_threaded_job_class_init (UlThreadedJobClass *klass)
 }
 
 /**
- * ul_threaded_job_new:
+ * storage_threaded_job_new:
  * @job_func: The function to run in another thread.
  * @user_data: User data to pass to @job_func.
  * @user_data_free_func: Function to free @user_data with or %NULL.
  * @cancellable: A #GCancellable or %NULL.
  *
- * Creates a new #UlThreadedJob instance.
+ * Creates a new #StorageThreadedJob instance.
  *
  * The job is started immediately - connect to the
- * #UlThreadedJob::threaded-job-completed or #UDisksJob::completed
+ * #StorageThreadedJob::threaded-job-completed or #UDisksJob::completed
  * signals to get notified when the job is done.
  *
- * Returns: A new #UlThreadedJob. Free with g_object_unref().
+ * Returns: A new #StorageThreadedJob. Free with g_object_unref().
  */
-UlThreadedJob *
-ul_threaded_job_new (UlJobFunc job_func,
-                     gpointer user_data,
-                     GDestroyNotify user_data_free_func,
-                     GCancellable *cancellable)
+StorageThreadedJob *
+storage_threaded_job_new (StorageJobFunc job_func,
+                          gpointer user_data,
+                          GDestroyNotify user_data_free_func,
+                          GCancellable *cancellable)
 {
   g_return_val_if_fail (cancellable == NULL || G_IS_CANCELLABLE (cancellable), NULL);
 
-  return g_object_new (UL_TYPE_THREADED_JOB,
+  return g_object_new (STORAGE_TYPE_THREADED_JOB,
                        "job-func", job_func,
                        "user-data", user_data,
                        "user-data-free-func", user_data_free_func,
@@ -357,17 +357,17 @@ ul_threaded_job_new (UlJobFunc job_func,
 }
 
 /**
- * ul_threaded_job_get_user_data:
- * @job: A #UlThreadedJob.
+ * storage_threaded_job_get_user_data:
+ * @job: A #StorageThreadedJob.
  *
  * Gets the @user_data parameter that @job was constructed with.
  *
  * Returns: A #gpointer owned by @job.
  */
 gpointer
-ul_threaded_job_get_user_data (UlThreadedJob *job)
+storage_threaded_job_get_user_data (StorageThreadedJob *job)
 {
-  g_return_val_if_fail (UL_IS_THREADED_JOB (job), NULL);
+  g_return_val_if_fail (STORAGE_IS_THREADED_JOB (job), NULL);
   return job->user_data;
 }
 
@@ -376,16 +376,16 @@ ul_threaded_job_get_user_data (UlThreadedJob *job)
 static void
 job_iface_init (UDisksJobIface *iface)
 {
-  /* For Cancel(), just use the implementation from our super class (UlBaseJob) */
+  /* For Cancel(), just use the implementation from our super class (StorageBaseJob) */
   /* iface->handle_cancel   = handle_cancel; */
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
 
 static gboolean
-ul_threaded_job_threaded_job_completed_default (UlThreadedJob *job,
-                                                gboolean result,
-                                                GError *error)
+storage_threaded_job_threaded_job_completed_default (StorageThreadedJob *job,
+                                                     gboolean result,
+                                                     GError *error)
 {
   if (result)
     {

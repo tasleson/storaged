@@ -18,27 +18,27 @@
  *
  */
 
-#ifndef __UL_THREADED_JOB_H__
-#define __UL_THREADED_JOB_H__
+#ifndef __STORAGE_THREADED_JOB_H__
+#define __STORAGE_THREADED_JOB_H__
 
 #include "types.h"
 #include "job.h"
 
 G_BEGIN_DECLS
 
-#define UL_TYPE_THREADED_JOB         (ul_threaded_job_get_type ())
-#define UL_THREADED_JOB(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_THREADED_JOB, UlThreadedJob))
-#define UL_IS_THREADED_JOB(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_THREADED_JOB))
+#define STORAGE_TYPE_THREADED_JOB         (storage_threaded_job_get_type ())
+#define STORAGE_THREADED_JOB(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), STORAGE_TYPE_THREADED_JOB, StorageThreadedJob))
+#define STORAGE_IS_THREADED_JOB(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), STORAGE_TYPE_THREADED_JOB))
 
-GType             ul_threaded_job_get_type         (void) G_GNUC_CONST;
+GType                 storage_threaded_job_get_type       (void) G_GNUC_CONST;
 
-UlThreadedJob *   ul_threaded_job_new              (UlJobFunc job_func,
-                                                    gpointer user_data,
-                                                    GDestroyNotify user_data_free_func,
-                                                    GCancellable *cancellable);
+StorageThreadedJob *  storage_threaded_job_new            (StorageJobFunc job_func,
+                                                           gpointer user_data,
+                                                           GDestroyNotify user_data_free_func,
+                                                           GCancellable *cancellable);
 
-gpointer          ul_threaded_job_get_user_data    (UlThreadedJob *job);
+gpointer              storage_threaded_job_get_user_data  (StorageThreadedJob *job);
 
 G_END_DECLS
 
-#endif /* __UL_THREADED_JOB_H__ */
+#endif /* __STORAGE_THREADED_JOB_H__ */

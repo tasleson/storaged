@@ -30,19 +30,19 @@
 #include <gudev/gudev.h>
 #include <glib/gi18n.h>
 
-struct _UlManager
+struct _StorageManager
 {
   LvmManagerSkeleton parent;
 
   UDisksClient *udisks_client;
   GUdevClient *udev_client;
 
-  /* maps from volume group name to UlVolumeGroupObject
+  /* maps from volume group name to StorageVolumeGroupObject
      instances.
   */
   GHashTable *name_to_volume_group;
 
-  /* maps from UDisks object paths to UlBlock instances.
+  /* maps from UDisks object paths to StorageBlock instances.
    */
   GHashTable *udisks_path_to_block;
 
@@ -58,11 +58,11 @@ struct _UlManager
 typedef struct
 {
   LvmManagerSkeletonClass parent;
-} UlManagerClass;
+} StorageManagerClass;
 
 static void lvm_manager_iface_init (LvmManagerIface *iface);
 
-G_DEFINE_TYPE_WITH_CODE (UlManager, ul_manager, LVM_TYPE_MANAGER_SKELETON,
+G_DEFINE_TYPE_WITH_CODE (StorageManager, storage_manager, LVM_TYPE_MANAGER_SKELETON,
                          G_IMPLEMENT_INTERFACE (LVM_TYPE_MANAGER, lvm_manager_iface_init);
 );
 
@@ -72,7 +72,7 @@ lvm_update_from_variant (GPid pid,
                          GError *error,
                          gpointer user_data)
 {
-  UlManager *self = user_data;
+  StorageManager *self = user_data;
   GVariantIter var_iter;
   GHashTableIter vg_name_iter;
   gpointer key, value;
@@ -89,7 +89,7 @@ lvm_update_from_variant (GPid pid,
   while (g_hash_table_iter_next (&vg_name_iter, &key, &value))
     {
       const gchar *vg;
-      UlVolumeGroup *group;
+      StorageVolumeGroup *group;
       gboolean found = FALSE;
 
       name = key;
@@ -117,37 +117,37 @@ lvm_update_from_variant (GPid pid,
   g_variant_iter_init (&var_iter, volume_groups);
   while (g_variant_iter_next (&var_iter, "&s", &name))
     {
-      UlVolumeGroup *group;
+      StorageVolumeGroup *group;
       group = g_hash_table_lookup (self->name_to_volume_group, name);
 
       if (group == NULL)
         {
-          group = ul_volume_group_new (name);
+          group = storage_volume_group_new (name);
           g_debug ("adding volume group: %s", name);
 
           g_hash_table_insert (self->name_to_volume_group, g_strdup (name), group);
         }
 
-      ul_volume_group_update (group);
+      storage_volume_group_update (group);
     }
 }
 
 static void
-lvm_update (UlManager *self)
+lvm_update (StorageManager *self)
 {
   const gchar *args[] = {
-      "udisks-lvm-helper", "-b", "list",
+      "storaged-lvm-helper", "-b", "list",
       NULL
   };
 
-  ul_daemon_spawn_for_variant (ul_daemon_get (), args, G_VARIANT_TYPE("as"),
+  storage_daemon_spawn_for_variant (storage_daemon_get (), args, G_VARIANT_TYPE("as"),
                                lvm_update_from_variant, self);
 }
 
 static gboolean
 delayed_lvm_update (gpointer user_data)
 {
-  UlManager *self = UL_MANAGER (user_data);
+  StorageManager *self = STORAGE_MANAGER (user_data);
 
   lvm_update (self);
   self->lvm_delayed_update_id = 0;
@@ -156,7 +156,7 @@ delayed_lvm_update (gpointer user_data)
 }
 
 static void
-trigger_delayed_lvm_update (UlManager *self)
+trigger_delayed_lvm_update (StorageManager *self)
 {
   if (self->lvm_delayed_update_id > 0)
     return;
@@ -179,11 +179,11 @@ has_physical_volume_label (GUdevDevice *device)
   return g_strcmp0 (id_fs_type, "LVM2_member") == 0;
 }
 
-static UlBlock *
-find_block (UlManager *self,
+static StorageBlock *
+find_block (StorageManager *self,
             dev_t device_number)
 {
-  UlBlock *our_block = NULL;
+  StorageBlock *our_block = NULL;
   UDisksBlock *real_block;
   GDBusObject *object;
   const gchar *path;
@@ -194,7 +194,7 @@ find_block (UlManager *self,
       object = g_dbus_interface_get_object (G_DBUS_INTERFACE (real_block));
       path = g_dbus_object_get_object_path (object);
 
-      our_block = ul_manager_find_block (self, path);
+      our_block = storage_manager_find_block (self, path);
       g_object_unref (real_block);
     }
 
@@ -202,16 +202,16 @@ find_block (UlManager *self,
 }
 
 static gboolean
-is_recorded_as_physical_volume (UlManager *self,
+is_recorded_as_physical_volume (StorageManager *self,
                                 GUdevDevice *device)
 {
-  UlBlock *block;
+  StorageBlock *block;
   gboolean ret = FALSE;
 
   block = find_block (self, g_udev_device_get_device_number (device));
   if (block != NULL)
     {
-      ret = (ul_block_get_physical_volume_block (block) != NULL);
+      ret = (storage_block_get_physical_volume_block (block) != NULL);
       g_object_unref (block);
     }
 
@@ -219,7 +219,7 @@ is_recorded_as_physical_volume (UlManager *self,
 }
 
 static void
-handle_block_uevent_for_lvm (UlManager *self,
+handle_block_uevent_for_lvm (StorageManager *self,
                              const gchar *action,
                              GUdevDevice *device)
 {
@@ -241,15 +241,15 @@ on_uevent (GUdevClient *client,
 }
 
 static void
-update_block_from_all_volume_groups (UlManager *self,
-                                     UlBlock *block)
+update_block_from_all_volume_groups (StorageManager *self,
+                                     StorageBlock *block)
 {
   GHashTableIter iter;
   gpointer value;
 
   g_hash_table_iter_init (&iter, self->name_to_volume_group);
   while (g_hash_table_iter_next (&iter, NULL, &value))
-    ul_volume_group_update_block (UL_VOLUME_GROUP (value), block);
+    storage_volume_group_update_block (STORAGE_VOLUME_GROUP (value), block);
 }
 
 static void
@@ -258,8 +258,8 @@ on_udisks_interface_added (GDBusObjectManager *udisks_object_manager,
                            GDBusInterface *interface,
                            gpointer user_data)
 {
-  UlManager *self = user_data;
-  UlBlock *overlay;
+  StorageManager *self = user_data;
+  StorageBlock *overlay;
   const gchar *path;
 
   if (!UDISKS_IS_BLOCK (interface))
@@ -268,7 +268,7 @@ on_udisks_interface_added (GDBusObjectManager *udisks_object_manager,
   /* Same path as the original real udisks block */
   path = g_dbus_proxy_get_object_path (G_DBUS_PROXY (interface));
 
-  overlay = g_object_new (UL_TYPE_BLOCK,
+  overlay = g_object_new (STORAGE_TYPE_BLOCK,
                           "real-block", interface,
                           "udev-client", self->udev_client,
                           NULL);
@@ -298,9 +298,9 @@ on_udisks_interface_removed (GDBusObjectManager *udisks_object_manager,
                              GDBusInterface *interface,
                              gpointer user_data)
 {
-  UlManager *self = user_data;
+  StorageManager *self = user_data;
   const gchar *path;
-  UlBlock *overlay;
+  StorageBlock *overlay;
 
   if (!UDISKS_IS_BLOCK (interface))
     return;
@@ -331,7 +331,7 @@ on_udisks_object_removed (GDBusObjectManager *udisks_object_manager,
 }
 
 GList *
-ul_manager_get_blocks (UlManager *self)
+storage_manager_get_blocks (StorageManager *self)
 {
   GList *blocks, *l;
 
@@ -341,11 +341,11 @@ ul_manager_get_blocks (UlManager *self)
   return blocks;
 }
 
-UlBlock *
-ul_manager_find_block (UlManager *self,
+StorageBlock *
+storage_manager_find_block (StorageManager *self,
                        const gchar *udisks_path)
 {
-  UlBlock *block;
+  StorageBlock *block;
   block = g_hash_table_lookup (self->udisks_path_to_block, udisks_path);
   if (block)
     return g_object_ref (block);
@@ -354,7 +354,7 @@ ul_manager_find_block (UlManager *self,
 }
 
 static void
-ul_manager_init (UlManager *self)
+storage_manager_init (StorageManager *self)
 {
   GDBusObjectManager *object_manager;
   GError *error = NULL;
@@ -409,20 +409,20 @@ ul_manager_init (UlManager *self)
 }
 
 static void
-ul_manager_constructed (GObject *object)
+storage_manager_constructed (GObject *object)
 {
-  UlManager *self = UL_MANAGER (object);
+  StorageManager *self = STORAGE_MANAGER (object);
 
-  G_OBJECT_CLASS (ul_manager_parent_class)->constructed (object);
+  G_OBJECT_CLASS (storage_manager_parent_class)->constructed (object);
 
   udisks_client_settle (self->udisks_client);
   lvm_update (self);
 }
 
 static void
-ul_manager_finalize (GObject *object)
+storage_manager_finalize (GObject *object)
 {
-  UlManager *self = UL_MANAGER (object);
+  StorageManager *self = STORAGE_MANAGER (object);
   GDBusObjectManager *objman;
 
   if (self->udisks_client)
@@ -443,16 +443,16 @@ ul_manager_finalize (GObject *object)
   g_hash_table_unref (self->name_to_volume_group);
   g_hash_table_unref (self->udisks_path_to_block);
 
-  G_OBJECT_CLASS (ul_manager_parent_class)->finalize (object);
+  G_OBJECT_CLASS (storage_manager_parent_class)->finalize (object);
 }
 
 static void
-ul_manager_class_init (UlManagerClass *klass)
+storage_manager_class_init (StorageManagerClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
-  object_class->constructed = ul_manager_constructed;
-  object_class->finalize = ul_manager_finalize;
+  object_class->constructed = storage_manager_constructed;
+  object_class->finalize = storage_manager_finalize;
 }
 
 typedef struct {
@@ -476,7 +476,7 @@ volume_group_create_job_thread (GCancellable *cancellable,
 
   for (i = 0; data->devices[i] != NULL; i++)
     {
-      if (!ul_util_wipe_block (data->devices[i], error))
+      if (!storage_util_wipe_block (data->devices[i], error))
         return FALSE;
     }
 
@@ -501,7 +501,7 @@ volume_group_create_job_thread (GCancellable *cancellable,
 
   if (ret)
     {
-      ret = ul_util_check_status_and_output ("vgcreate",
+      ret = storage_util_check_status_and_output ("vgcreate",
                                              exit_status, standard_output,
                                              standard_error, error);
     }
@@ -533,16 +533,16 @@ complete_closure_free (gpointer user_data,
 }
 
 static void
-on_create_volume_group (UlDaemon *daemon,
-                        UlVolumeGroup *group,
+on_create_volume_group (StorageDaemon *daemon,
+                        StorageVolumeGroup *group,
                         gpointer user_data)
 {
   CompleteClosure *complete = user_data;
 
-  if (g_str_equal (ul_volume_group_get_name (group), complete->data.vgname))
+  if (g_str_equal (storage_volume_group_get_name (group), complete->data.vgname))
     {
       lvm_manager_complete_volume_group_create (NULL, complete->invocation,
-                                                ul_volume_group_get_object_path (group));
+                                                storage_volume_group_get_object_path (group));
       g_signal_handler_disconnect (daemon, complete->wait_sig);
     }
 }
@@ -560,7 +560,7 @@ on_create_complete (UDisksJob *job,
 
   g_dbus_method_invocation_return_error (complete->invocation, UDISKS_ERROR,
                                          UDISKS_ERROR_FAILED, "Error creating volume group: %s", message);
-  g_signal_handler_disconnect (ul_daemon_get (), complete->wait_sig);
+  g_signal_handler_disconnect (storage_daemon_get (), complete->wait_sig);
 }
 
 static gboolean
@@ -571,17 +571,17 @@ handle_volume_group_create (LvmManager *manager,
                             guint64 arg_extent_size,
                             GVariant *arg_options)
 {
-  UlManager *self = UL_MANAGER (manager);
+  StorageManager *self = STORAGE_MANAGER (manager);
   GError *error = NULL;
   GList *blocks = NULL;
   GList *l;
   guint n;
-  UlDaemon *daemon;
+  StorageDaemon *daemon;
   gchar *encoded_name = NULL;
   CompleteClosure *complete;
-  UlJob *job;
+  StorageJob *job;
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
   /* Collect and validate block objects
    *
@@ -591,9 +591,9 @@ handle_volume_group_create (LvmManager *manager,
    */
   for (n = 0; arg_blocks != NULL && arg_blocks[n] != NULL; n++)
     {
-      UlBlock *block = NULL;
+      StorageBlock *block = NULL;
 
-      block = ul_manager_find_block (self, arg_blocks[n]);
+      block = storage_manager_find_block (self, arg_blocks[n]);
 
       /* Assumes ref, do this early for memory management */
       blocks = g_list_prepend (blocks, block);
@@ -608,7 +608,7 @@ handle_volume_group_create (LvmManager *manager,
           goto out;
         }
 
-      if (!ul_block_is_unused (block, &error))
+      if (!storage_block_is_unused (block, &error))
         {
           g_dbus_method_invocation_take_error (invocation, error);
           goto out;
@@ -620,7 +620,7 @@ handle_volume_group_create (LvmManager *manager,
   /* Create the volume group... */
   complete = g_new0 (CompleteClosure, 1);
   complete->invocation = g_object_ref (invocation);
-  complete->data.vgname = ul_util_encode_lvm_name (arg_name, FALSE);
+  complete->data.vgname = storage_util_encode_lvm_name (arg_name, FALSE);
   if (arg_extent_size > 0)
     complete->data.extent_size = g_strdup_printf ("%" G_GUINT64_FORMAT "b", arg_extent_size);
 
@@ -628,12 +628,12 @@ handle_volume_group_create (LvmManager *manager,
   for (n = 0, l = blocks; l != NULL; l = g_list_next (l), n++)
     {
       g_assert (arg_blocks[n] != NULL);
-      complete->data.devices[n] = g_strdup (ul_block_get_device (l->data));
+      complete->data.devices[n] = g_strdup (storage_block_get_device (l->data));
     }
 
-  job = ul_daemon_launch_threaded_job (daemon, NULL,
+  job = storage_daemon_launch_threaded_job (daemon, NULL,
                                        "lvm-vg-create",
-                                       ul_invocation_get_caller_uid (invocation),
+                                       storage_invocation_get_caller_uid (invocation),
                                        volume_group_create_job_thread,
                                        &complete->data,
                                        NULL, NULL);
@@ -643,7 +643,7 @@ handle_volume_group_create (LvmManager *manager,
 
   /* Wait for the object to appear */
   complete->wait_sig = g_signal_connect_data (daemon,
-                                              "published::UlVolumeGroup",
+                                              "published::StorageVolumeGroup",
                                               G_CALLBACK (on_create_volume_group),
                                               complete, complete_closure_free, 0);
 
@@ -660,8 +660,8 @@ lvm_manager_iface_init (LvmManagerIface *iface)
   iface->handle_volume_group_create = handle_volume_group_create;
 }
 
-UlManager *
-ul_manager_new (void)
+StorageManager *
+storage_manager_new (void)
 {
-  return g_object_new (UL_TYPE_MANAGER, NULL);
+  return g_object_new (STORAGE_TYPE_MANAGER, NULL);
 }

@@ -36,14 +36,14 @@ typedef struct
 } Sample;
 
 /**
- * SECTION:udisksbasejob
- * @title: UlJob
+ * SECTION:storagejob
+ * @title: StorageJob
  * @short_description: Base class for jobs.
  *
  * This type provides common features needed by all job types.
  */
 
-struct _UlJobPrivate
+struct _StorageJobPrivate
 {
   GCancellable *cancellable;
 
@@ -64,14 +64,14 @@ enum
   PROP_AUTO_ESTIMATE,
 };
 
-G_DEFINE_ABSTRACT_TYPE_WITH_CODE (UlJob, ul_job, UDISKS_TYPE_JOB_SKELETON,
+G_DEFINE_ABSTRACT_TYPE_WITH_CODE (StorageJob, storage_job, UDISKS_TYPE_JOB_SKELETON,
                                   G_IMPLEMENT_INTERFACE (UDISKS_TYPE_JOB, job_iface_init)
 );
 
 static void
-ul_job_finalize (GObject *object)
+storage_job_finalize (GObject *object)
 {
-  UlJob *self = UL_JOB (object);
+  StorageJob *self = STORAGE_JOB (object);
 
   g_free (self->priv->samples);
 
@@ -81,16 +81,16 @@ ul_job_finalize (GObject *object)
       self->priv->cancellable = NULL;
     }
 
-  G_OBJECT_CLASS (ul_job_parent_class)->finalize (object);
+  G_OBJECT_CLASS (storage_job_parent_class)->finalize (object);
 }
 
 static void
-ul_job_get_property (GObject *object,
-                     guint prop_id,
-                     GValue *value,
-                     GParamSpec *pspec)
+storage_job_get_property (GObject *object,
+                          guint prop_id,
+                          GValue *value,
+                          GParamSpec *pspec)
 {
-  UlJob *self = UL_JOB (object);
+  StorageJob *self = STORAGE_JOB (object);
 
   switch (prop_id)
     {
@@ -109,12 +109,12 @@ ul_job_get_property (GObject *object,
 }
 
 static void
-ul_job_set_property (GObject *object,
-                     guint prop_id,
-                     const GValue *value,
-                     GParamSpec *pspec)
+storage_job_set_property (GObject *object,
+                          guint prop_id,
+                          const GValue *value,
+                          GParamSpec *pspec)
 {
-  UlJob *self = UL_JOB (object);
+  StorageJob *self = STORAGE_JOB (object);
 
   switch (prop_id)
     {
@@ -124,7 +124,7 @@ ul_job_set_property (GObject *object,
       break;
 
     case PROP_AUTO_ESTIMATE:
-      ul_job_set_auto_estimate (self, g_value_get_boolean (value));
+      storage_job_set_auto_estimate (self, g_value_get_boolean (value));
       break;
 
     default:
@@ -136,43 +136,43 @@ ul_job_set_property (GObject *object,
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
-ul_job_constructed (GObject *object)
+storage_job_constructed (GObject *object)
 {
-  UlJob *self = UL_JOB (object);
+  StorageJob *self = STORAGE_JOB (object);
 
   if (self->priv->cancellable == NULL)
     self->priv->cancellable = g_cancellable_new ();
 
-  if (G_OBJECT_CLASS (ul_job_parent_class)->constructed != NULL)
-    G_OBJECT_CLASS (ul_job_parent_class)->constructed (object);
+  if (G_OBJECT_CLASS (storage_job_parent_class)->constructed != NULL)
+    G_OBJECT_CLASS (storage_job_parent_class)->constructed (object);
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
-ul_job_init (UlJob *self)
+storage_job_init (StorageJob *self)
 {
   gint64 now_usec;
 
-  self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self, UL_TYPE_JOB, UlJobPrivate);
+  self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self, STORAGE_TYPE_JOB, StorageJobPrivate);
 
   now_usec = g_get_real_time ();
   udisks_job_set_start_time (UDISKS_JOB (self), now_usec);
 }
 
 static void
-ul_job_class_init (UlJobClass *klass)
+storage_job_class_init (StorageJobClass *klass)
 {
   GObjectClass *gobject_class;
 
   gobject_class = G_OBJECT_CLASS (klass);
-  gobject_class->finalize     = ul_job_finalize;
-  gobject_class->constructed  = ul_job_constructed;
-  gobject_class->set_property = ul_job_set_property;
-  gobject_class->get_property = ul_job_get_property;
+  gobject_class->finalize     = storage_job_finalize;
+  gobject_class->constructed  = storage_job_constructed;
+  gobject_class->set_property = storage_job_set_property;
+  gobject_class->get_property = storage_job_get_property;
 
   /**
-   * UlJob:cancellable:
+   * StorageJob:cancellable:
    *
    * The #GCancellable to use.
    */
@@ -188,10 +188,10 @@ ul_job_class_init (UlJobClass *klass)
                                                         G_PARAM_STATIC_STRINGS));
 
   /**
-   * UlJob:auto-estimate:
+   * StorageJob:auto-estimate:
    *
-   * If %TRUE, the #UlJob:expected-end-time property will be
-   * automatically updated every time the #UlJob:progress property
+   * If %TRUE, the #StorageJob:expected-end-time property will be
+   * automatically updated every time the #StorageJob:progress property
    * is updated.
    */
   g_object_class_install_property (gobject_class,
@@ -204,39 +204,39 @@ ul_job_class_init (UlJobClass *klass)
                                                          G_PARAM_WRITABLE |
                                                          G_PARAM_STATIC_STRINGS));
 
-  g_type_class_add_private (klass, sizeof (UlJobPrivate));
+  g_type_class_add_private (klass, sizeof (StorageJobPrivate));
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
 
 /**
- * ul_job_get_cancellable:
- * @self: A #UlJob.
+ * storage_job_get_cancellable:
+ * @self: A #StorageJob.
  *
  * Gets the #GCancellable for job.
  *
  * Returns: A #GCancellable. Do not free, the object belongs to job.
  */
 GCancellable *
-ul_job_get_cancellable (UlJob *self)
+storage_job_get_cancellable (StorageJob *self)
 {
-  g_return_val_if_fail (UL_IS_JOB (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_JOB (self), NULL);
   return self->priv->cancellable;
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
 
 /**
- * ul_job_add_object:
- * @self: A #UlJob.
- * @object: A #UlObject.
+ * storage_job_add_object:
+ * @self: A #StorageJob.
+ * @object: A #StorageObject.
  *
  * Adds the object path for @object to the <link
  * linkend="gdbus-property-org-freedesktop-UDisks2-Job.Objects">Objects</link>
  * array. If the object path is already in the array, does nothing.
  */
 void
-ul_job_add_thing (UlJob *self,
+storage_job_add_thing (StorageJob *self,
                   gpointer object_or_interface)
 {
   const gchar *object_path;
@@ -244,7 +244,7 @@ ul_job_add_thing (UlJob *self,
   const gchar **p;
   guint n;
 
-  g_return_if_fail (UL_IS_JOB (self));
+  g_return_if_fail (STORAGE_IS_JOB (self));
 
   if (object_or_interface == NULL)
     return;
@@ -252,8 +252,8 @@ ul_job_add_thing (UlJob *self,
     object_path = g_dbus_object_get_object_path (object_or_interface);
   else if (G_IS_DBUS_INTERFACE_SKELETON (object_or_interface))
     object_path = g_dbus_interface_skeleton_get_object_path (object_or_interface);
-  else if (UL_IS_BLOCK (object_or_interface))
-    object_path = ul_block_get_object_path (object_or_interface);
+  else if (STORAGE_IS_BLOCK (object_or_interface))
+    object_path = storage_block_get_object_path (object_or_interface);
   else
     {
       g_critical ("Invalid interface or object passed to job: %s",
@@ -284,7 +284,7 @@ handle_cancel (UDisksJob *job,
                GDBusMethodInvocation *invocation,
                GVariant *options)
 {
-  UlJob *self = UL_JOB (job);
+  StorageJob *self = STORAGE_JOB (job);
 
   if (!udisks_job_get_cancelable (job))
     {
@@ -323,17 +323,17 @@ job_iface_init (UDisksJobIface *iface)
 /* ---------------------------------------------------------------------------------------------------- */
 
 /**
- * ul_job_get_auto_estimate:
- * @self: A #UlJob.
+ * storage_job_get_auto_estimate:
+ * @self: A #StorageJob.
  *
  * Gets whether auto-estimation is being used.
  *
  * Returns: %TRUE if auto-estimation is being used, %FALSE otherwise.
  */
 gboolean
-ul_job_get_auto_estimate (UlJob *self)
+storage_job_get_auto_estimate (StorageJob *self)
 {
-  g_return_val_if_fail (UL_IS_JOB (self), FALSE);
+  g_return_val_if_fail (STORAGE_IS_JOB (self), FALSE);
   return self->priv->auto_estimate;
 }
 
@@ -343,7 +343,7 @@ on_notify_progress (GObject     *object,
                     GParamSpec  *spec,
                     gpointer     user_data)
 {
-  UlJob *self = UL_JOB (user_data);
+  StorageJob *self = STORAGE_JOB (user_data);
   Sample *sample;
   guint n;
   gdouble sum_of_speeds;
@@ -404,17 +404,17 @@ on_notify_progress (GObject     *object,
 }
 
 /**
- * ul_job_set_auto_estimate:
- * @self: A #UlJob.
+ * storage_job_set_auto_estimate:
+ * @self: A #StorageJob.
  * @value: %TRUE if auto-estimation is to be use, %FALSE otherwise.
  *
  * Sets whether auto-estimation is being used.
  */
 void
-ul_job_set_auto_estimate (UlJob *self,
-                          gboolean value)
+storage_job_set_auto_estimate (StorageJob *self,
+                               gboolean value)
 {
-  g_return_if_fail (UL_IS_JOB (self));
+  g_return_if_fail (STORAGE_IS_JOB (self));
 
   if (!!value == !!self->priv->auto_estimate)
     goto out;

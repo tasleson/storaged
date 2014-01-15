@@ -18,23 +18,23 @@
  *
  */
 
-#ifndef __UL_TYPES_H__
-#define __UL_TYPES_H__
+#ifndef __STORAGE_TYPES_H__
+#define __STORAGE_TYPES_H__
 
 #include "com.redhat.lvm2.h"
 
 G_BEGIN_DECLS
 
-typedef struct _UlBlock          UlBlock;
-typedef struct _UlLogicalVolume  UlLogicalVolume;
-typedef struct _UlPhysicalVolume UlPhysicalVolume;
-typedef struct _UlVolumeGroup    UlVolumeGroup;
-typedef struct _UlDaemon         UlDaemon;
-typedef struct _UlManager        UlManager;
-typedef struct _UlJob            UlJob;
-typedef struct _UlSpawnedJob     UlSpawnedJob;
-typedef struct _UlThreadedJob    UlThreadedJob;
+typedef struct _StorageBlock          StorageBlock;
+typedef struct _StorageLogicalVolume  StorageLogicalVolume;
+typedef struct _StoragePhysicalVolume StoragePhysicalVolume;
+typedef struct _StorageVolumeGroup    StorageVolumeGroup;
+typedef struct _StorageDaemon         StorageDaemon;
+typedef struct _StorageManager        StorageManager;
+typedef struct _StorageJob            StorageJob;
+typedef struct _StorageSpawnedJob     StorageSpawnedJob;
+typedef struct _StorageThreadedJob    StorageThreadedJob;
 
 G_END_DECLS
 
-#endif /* __UL_DAEMON_H__ */
+#endif /* __STORAGE_DAEMON_H__ */

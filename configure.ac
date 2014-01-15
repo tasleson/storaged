@@ -1,26 +1,26 @@
 
-m4_define([udisks_lvm_major], [2])
-m4_define([udisks_lvm_minor], [0])
-m4_define([udisks_lvm_micro], [0])
+m4_define([storaged_major], [0])
+m4_define([storaged_minor], [1])
+m4_define([storaged_micro], [0])
 
 dnl ---------------------------------------------------------------------------
 
-m4_define([udisks_lvm_version],
-          [udisks_lvm_major.udisks_lvm_minor.udisks_lvm_micro])
+m4_define([storaged_version],
+          [storaged_major.storaged_minor.storaged_micro])
 
-AC_INIT([udisks-lvm],
-        [udisks_lvm_version],
+AC_INIT([storaged],
+        [storaged_version],
         [mvollmer@redhat.com],
-        [udisks-lvm])
+        [storaged])
 
-UDISKS_LVM_MAJOR=udisks_lvm_major
-UDISKS_LVM_MINOR=udisks_lvm_minor
-UDISKS_LVM_MICRO=udisks_lvm_micro
-UDISKS_LVM_VERSION=udisks_lvm_version
-AC_SUBST(UDISKS_LVM_MAJOR)
-AC_SUBST(UDISKS_LVM_MINOR)
-AC_SUBST(UDISKS_LVM_MICRO)
-AC_SUBST(UDISKS_LVM_VERSION)
+STORAGED_MAJOR=storaged_major
+STORAGED_MINOR=storaged_minor
+STORAGED_MICRO=storaged_micro
+STORAGED_VERSION=storaged_version
+AC_SUBST(STORAGED_MAJOR)
+AC_SUBST(STORAGED_MINOR)
+AC_SUBST(STORAGED_MICRO)
+AC_SUBST(STORAGED_VERSION)
 
 AM_INIT_AUTOMAKE([1.9 foreign dist-bzip2 no-dist-gzip serial-tests])
 AC_CONFIG_SRCDIR([src])
@@ -165,7 +165,7 @@ AM_CONDITIONAL(HAVE_SYSTEMD, [test -n "$systemdsystemunitdir"])
 #
 
 IT_PROG_INTLTOOL([$INTLTOOL_REQUIRED])
-GETTEXT_PACKAGE=udisks-lvm
+GETTEXT_PACKAGE=storaged
 AC_SUBST([GETTEXT_PACKAGE])
 AM_GLIB_GNU_GETTEXT
 AC_DEFINE_UNQUOTED([GETTEXT_PACKAGE],["$GETTEXT_PACKAGE"],[gettext domain])
@@ -249,7 +249,7 @@ po/Makefile.in
 
 dnl ==========================================================================
 echo "
-               udisks-lvm $VERSION
+               storaged $VERSION
              =====================
 
         prefix:                     ${prefix}

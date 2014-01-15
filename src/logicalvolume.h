@@ -19,36 +19,36 @@
  *
  */
 
-#ifndef __UL_LOGICAL_VOLUME_H__
-#define __UL_LOGICAL_VOLUME_H__
+#ifndef __STORAGE_LOGICAL_VOLUME_H__
+#define __STORAGE_LOGICAL_VOLUME_H__
 
 #include "types.h"
 
 G_BEGIN_DECLS
 
-#define UL_TYPE_LOGICAL_VOLUME         (ul_logical_volume_get_type ())
-#define UL_LOGICAL_VOLUME(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_LOGICAL_VOLUME, UlLogicalVolume))
-#define UL_IS_LOGICAL_VOLUME(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_LOGICAL_VOLUME))
+#define STORAGE_TYPE_LOGICAL_VOLUME         (storage_logical_volume_get_type ())
+#define STORAGE_LOGICAL_VOLUME(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), STORAGE_TYPE_LOGICAL_VOLUME, StorageLogicalVolume))
+#define STORAGE_IS_LOGICAL_VOLUME(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), STORAGE_TYPE_LOGICAL_VOLUME))
 
-GType                ul_logical_volume_get_type         (void) G_GNUC_CONST;
+GType                   storage_logical_volume_get_type         (void) G_GNUC_CONST;
 
-UlLogicalVolume *    ul_logical_volume_new              (UlVolumeGroup *group,
-                                                         const gchar *name);
+StorageLogicalVolume *  storage_logical_volume_new              (StorageVolumeGroup *group,
+                                                                 const gchar *name);
 
-const gchar *        ul_logical_volume_get_name         (UlLogicalVolume *self);
+const gchar *           storage_logical_volume_get_name         (StorageLogicalVolume *self);
 
-const gchar *        ul_logical_volume_get_object_path  (UlLogicalVolume *self);
+const gchar *           storage_logical_volume_get_object_path  (StorageLogicalVolume *self);
 
-UlVolumeGroup *      ul_logical_volume_get_volume_group (UlLogicalVolume *self);
+StorageVolumeGroup *    storage_logical_volume_get_volume_group (StorageLogicalVolume *self);
 
-void                 ul_logical_volume_set_volume_group (UlLogicalVolume *self,
-                                                         UlVolumeGroup *group);
+void                    storage_logical_volume_set_volume_group (StorageLogicalVolume *self,
+                                                                 StorageVolumeGroup *group);
 
-void                 ul_logical_volume_update           (UlLogicalVolume *self,
-                                                         UlVolumeGroup *group,
-                                                         GVariant *info,
-                                                         gboolean *needs_polling_ret);
+void                    storage_logical_volume_update           (StorageLogicalVolume *self,
+                                                                 StorageVolumeGroup *group,
+                                                                 GVariant *info,
+                                                                 gboolean *needs_polling_ret);
 
 G_END_DECLS
 
-#endif /* __UL_LOGICAL_VOLUME_H__ */
+#endif /* __STORAGE_LOGICAL_VOLUME_H__ */

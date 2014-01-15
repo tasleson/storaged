@@ -42,12 +42,11 @@ data/*.service
 doc/version.xml
 doc/man/*.8
 
-po/udisks-lvm.pot
+po/storaged.pot
 
 src/com.redhat.lvm2.*
-src/udisks-lvm
-src/udisks-lvm-helper
-src/udisksd-lvm
+src/storaged
+src/storaged-lvm-helper
 
 src/tests/test-*
 !src/tests/test-*.[ch]

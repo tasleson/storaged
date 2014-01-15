@@ -37,19 +37,19 @@
 
 #include <fcntl.h>
 
-struct _UlBlock
+struct _StorageBlock
 {
   GObject parent;
   UDisksBlock *real_block;
   GUdevClient *udev_client;
-  UlPhysicalVolume *iface_physical_volume;
+  StoragePhysicalVolume *iface_physical_volume;
   LvmLogicalVolumeBlock *iface_logical_volume;
 };
 
 typedef struct
 {
   GObjectClass parent;
-} UlBlockClass;
+} StorageBlockClass;
 
 enum
 {
@@ -58,53 +58,53 @@ enum
   PROP_REAL_BLOCK,
 };
 
-G_DEFINE_TYPE (UlBlock, ul_block, G_TYPE_OBJECT);
+G_DEFINE_TYPE (StorageBlock, storage_block, G_TYPE_OBJECT);
 
 static void
-ul_block_dispose (GObject *object)
+storage_block_dispose (GObject *object)
 {
-  UlBlock *self = UL_BLOCK (object);
-  UlDaemon *daemon;
+  StorageBlock *self = STORAGE_BLOCK (object);
+  StorageDaemon *daemon;
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
   if (self->iface_physical_volume)
     {
-      ul_daemon_unpublish (daemon, ul_block_get_object_path (self), self->iface_physical_volume);
+      storage_daemon_unpublish (daemon, storage_block_get_object_path (self), self->iface_physical_volume);
       g_object_unref (self->iface_physical_volume);
       self->iface_physical_volume = NULL;
     }
 
   if (self->iface_logical_volume)
     {
-      ul_daemon_unpublish (daemon, ul_block_get_object_path (self), self->iface_logical_volume);
+      storage_daemon_unpublish (daemon, storage_block_get_object_path (self), self->iface_logical_volume);
       g_object_unref (self->iface_logical_volume);
       self->iface_logical_volume = NULL;
     }
 
-  G_OBJECT_CLASS (ul_block_parent_class)->dispose (object);
+  G_OBJECT_CLASS (storage_block_parent_class)->dispose (object);
 }
 
 static void
-ul_block_finalize (GObject *object)
+storage_block_finalize (GObject *object)
 {
-  UlBlock *self = UL_BLOCK (object);
+  StorageBlock *self = STORAGE_BLOCK (object);
 
   g_clear_object (&self->real_block);
   g_clear_object (&self->udev_client);
   g_clear_object (&self->iface_physical_volume);
   g_clear_object (&self->iface_logical_volume);
 
-  G_OBJECT_CLASS (ul_block_parent_class)->finalize (object);
+  G_OBJECT_CLASS (storage_block_parent_class)->finalize (object);
 }
 
 static void
-ul_block_set_property (GObject *object,
-                              guint prop_id,
-                              const GValue *value,
-                              GParamSpec *pspec)
+storage_block_set_property (GObject *object,
+                            guint prop_id,
+                            const GValue *value,
+                            GParamSpec *pspec)
 {
-  UlBlock *self = UL_BLOCK (object);
+  StorageBlock *self = STORAGE_BLOCK (object);
 
   switch (prop_id)
     {
@@ -125,20 +125,20 @@ ul_block_set_property (GObject *object,
 }
 
 static void
-ul_block_init (UlBlock *self)
+storage_block_init (StorageBlock *self)
 {
 
 }
 
 static void
-ul_block_class_init (UlBlockClass *klass)
+storage_block_class_init (StorageBlockClass *klass)
 {
   GObjectClass *gobject_class;
 
   gobject_class = G_OBJECT_CLASS (klass);
-  gobject_class->dispose = ul_block_dispose;
-  gobject_class->finalize = ul_block_finalize;
-  gobject_class->set_property = ul_block_set_property;
+  gobject_class->dispose = storage_block_dispose;
+  gobject_class->finalize = storage_block_finalize;
+  gobject_class->set_property = storage_block_set_property;
 
   g_object_class_install_property (gobject_class,
                                    PROP_REAL_BLOCK,
@@ -158,19 +158,19 @@ ul_block_class_init (UlBlockClass *klass)
 }
 
 const gchar *
-ul_block_get_object_path (UlBlock *self)
+storage_block_get_object_path (StorageBlock *self)
 {
-  g_return_val_if_fail (UL_IS_BLOCK (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_BLOCK (self), NULL);
   g_return_val_if_fail (self->real_block != NULL, NULL);
   return g_dbus_proxy_get_object_path (G_DBUS_PROXY (self->real_block));
 }
 
 GUdevDevice *
-ul_block_get_udev (UlBlock *self)
+storage_block_get_udev (StorageBlock *self)
 {
   dev_t num;
 
-  g_return_val_if_fail (UL_IS_BLOCK (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_BLOCK (self), NULL);
 
   num = udisks_block_get_device_number (self->real_block);
   return g_udev_client_query_by_device_number (self->udev_client,
@@ -178,64 +178,64 @@ ul_block_get_udev (UlBlock *self)
 }
 
 const gchar *
-ul_block_get_device (UlBlock *self)
+storage_block_get_device (StorageBlock *self)
 {
-  g_return_val_if_fail (UL_IS_BLOCK (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_BLOCK (self), NULL);
   return udisks_block_get_device (self->real_block);
 }
 
 const gchar **
-ul_block_get_symlinks (UlBlock *self)
+storage_block_get_symlinks (StorageBlock *self)
 {
-  g_return_val_if_fail (UL_IS_BLOCK (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_BLOCK (self), NULL);
   return (const gchar **)udisks_block_get_symlinks (self->real_block);
 }
 
 const gchar *
-ul_block_get_id_type (UlBlock *self)
+storage_block_get_id_type (StorageBlock *self)
 {
-  g_return_val_if_fail (UL_IS_BLOCK (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_BLOCK (self), NULL);
   return udisks_block_get_id_type (self->real_block);
 }
 
 const gchar *
-ul_block_get_id_usage (UlBlock *self)
+storage_block_get_id_usage (StorageBlock *self)
 {
-  g_return_val_if_fail (UL_IS_BLOCK (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_BLOCK (self), NULL);
   return udisks_block_get_id_usage (self->real_block);
 }
 
 const gchar *
-ul_block_get_id_version (UlBlock *self)
+storage_block_get_id_version (StorageBlock *self)
 {
-  g_return_val_if_fail (UL_IS_BLOCK (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_BLOCK (self), NULL);
   return udisks_block_get_id_version (self->real_block);
 }
 
 const gchar *
-ul_block_get_id_label (UlBlock *self)
+storage_block_get_id_label (StorageBlock *self)
 {
-  g_return_val_if_fail (UL_IS_BLOCK (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_BLOCK (self), NULL);
   return udisks_block_get_id_label (self->real_block);
 }
 
 const gchar *
-ul_block_get_id_uuid (UlBlock *self)
+storage_block_get_id_uuid (StorageBlock *self)
 {
-  g_return_val_if_fail (UL_IS_BLOCK (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_BLOCK (self), NULL);
   return udisks_block_get_id_uuid (self->real_block);
 }
 
 gboolean
-ul_block_is_unused (UlBlock *self,
+storage_block_is_unused (StorageBlock *self,
                     GError **error)
 {
   const gchar *device_file;
   int fd;
 
-  g_return_val_if_fail (UL_IS_BLOCK (self), FALSE);
+  g_return_val_if_fail (STORAGE_IS_BLOCK (self), FALSE);
 
-  device_file = ul_block_get_device (self);
+  device_file = storage_block_get_device (self);
   fd = open (device_file, O_RDONLY | O_EXCL);
   if (fd < 0)
     {
@@ -249,28 +249,28 @@ ul_block_is_unused (UlBlock *self,
 }
 
 void
-ul_block_update_lv (UlBlock *self,
-                    UlLogicalVolume *lv)
+storage_block_update_lv (StorageBlock *self,
+                         StorageLogicalVolume *lv)
 {
   const gchar *logical_volume_path;
-  UlDaemon *daemon;
+  StorageDaemon *daemon;
 
-  g_return_if_fail (UL_IS_BLOCK (self));
+  g_return_if_fail (STORAGE_IS_BLOCK (self));
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
   if (lv == NULL)
     {
       if (self->iface_logical_volume)
         {
-          ul_daemon_unpublish (daemon, ul_block_get_object_path (self), self->iface_logical_volume);
+          storage_daemon_unpublish (daemon, storage_block_get_object_path (self), self->iface_logical_volume);
           g_object_unref (self->iface_logical_volume);
           self->iface_logical_volume = NULL;
         }
     }
   else
     {
-      logical_volume_path = ul_logical_volume_get_object_path (lv);
+      logical_volume_path = storage_logical_volume_get_object_path (lv);
       if (self->iface_logical_volume)
         {
           lvm_logical_volume_block_set_logical_volume (self->iface_logical_volume,
@@ -281,40 +281,40 @@ ul_block_update_lv (UlBlock *self,
           self->iface_logical_volume = lvm_logical_volume_block_skeleton_new ();
           lvm_logical_volume_block_set_logical_volume (self->iface_logical_volume,
                                                        logical_volume_path);
-          ul_daemon_publish (daemon, ul_block_get_object_path (self), FALSE, self->iface_logical_volume);
+          storage_daemon_publish (daemon, storage_block_get_object_path (self), FALSE, self->iface_logical_volume);
         }
     }
 }
 
 void
-ul_block_update_pv (UlBlock *self,
-                    UlVolumeGroup *group,
-                    GVariant *pv_info)
+storage_block_update_pv (StorageBlock *self,
+                         StorageVolumeGroup *group,
+                         GVariant *pv_info)
 {
-  UlDaemon *daemon;
+  StorageDaemon *daemon;
 
-  g_return_if_fail (UL_IS_BLOCK (self));
+  g_return_if_fail (STORAGE_IS_BLOCK (self));
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
   if (group)
     {
      if (self->iface_physical_volume == NULL)
         {
-          self->iface_physical_volume = ul_physical_volume_new ();
-          ul_physical_volume_update (self->iface_physical_volume, group, pv_info);
-          ul_daemon_publish (daemon, ul_block_get_object_path (self), FALSE, self->iface_physical_volume);
+          self->iface_physical_volume = storage_physical_volume_new ();
+          storage_physical_volume_update (self->iface_physical_volume, group, pv_info);
+          storage_daemon_publish (daemon, storage_block_get_object_path (self), FALSE, self->iface_physical_volume);
         }
       else
         {
-          ul_physical_volume_update (self->iface_physical_volume, group, pv_info);
+          storage_physical_volume_update (self->iface_physical_volume, group, pv_info);
         }
     }
   else
     {
       if (self->iface_physical_volume != NULL)
         {
-          ul_daemon_unpublish (daemon, ul_block_get_object_path (self), self->iface_physical_volume);
+          storage_daemon_unpublish (daemon, storage_block_get_object_path (self), self->iface_physical_volume);
           g_object_unref (self->iface_physical_volume);
           self->iface_physical_volume = NULL;
         }
@@ -323,31 +323,31 @@ ul_block_update_pv (UlBlock *self,
 }
 
 LvmLogicalVolumeBlock *
-ul_block_get_logical_volume_block (UlBlock *self)
+storage_block_get_logical_volume_block (StorageBlock *self)
 {
-  g_return_val_if_fail (UL_IS_BLOCK (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_BLOCK (self), NULL);
   return self->iface_logical_volume;
 }
 
 LvmPhysicalVolumeBlock *
-ul_block_get_physical_volume_block (UlBlock *self)
+storage_block_get_physical_volume_block (StorageBlock *self)
 {
-  g_return_val_if_fail (UL_IS_BLOCK (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_BLOCK (self), NULL);
   return LVM_PHYSICAL_VOLUME_BLOCK (self->iface_physical_volume);
 }
 
 void
-ul_block_trigger_uevent (UlBlock *self)
+storage_block_trigger_uevent (StorageBlock *self)
 {
   GUdevDevice *device;
   gchar* path = NULL;
   gint fd = -1;
 
-  g_return_if_fail (UL_IS_BLOCK (self));
+  g_return_if_fail (STORAGE_IS_BLOCK (self));
 
   /* TODO: would be nice with a variant to wait until the request uevent has been received by ourselves */
 
-  device = ul_block_get_udev (self);
+  device = storage_block_get_udev (self);
   if (device == NULL)
     {
       g_debug ("skipping trigger of udev event for block object");

@@ -16,7 +16,6 @@ AM_CPPFLAGS = \
 	-DPACKAGE_LOCALE_DIR=\""$(localedir)"\" 		\
 	-DPACKAGE_LIB_DIR=\""$(prefix)/lib"\" 			\
 	-D_POSIX_PTHREAD_SEMANTICS -D_REENTRANT			\
-	-DUDISKS_COMPILATION					\
 	$(POLKIT_GOBJECT_1_CFLAGS) 				\
 	$(GUDEV_CFLAGS) 					\
 	$(GLIB_CFLAGS) 						\
@@ -42,9 +41,9 @@ BUILT_SOURCES = $(dbus_built_sources)
 
 # ----------------------------------------------------------------------------------------------------
 
-noinst_LTLIBRARIES = libudisks-lvm.la
+noinst_LTLIBRARIES = libstoraged.la
 
-libudisks_lvm_la_SOURCES = \
+libstoraged_la_SOURCES = \
 	types.h \
 	block.h block.c \
 	daemon.h daemon.c \
@@ -60,9 +59,9 @@ libudisks_lvm_la_SOURCES = \
 	$(dbus_built_sources) \
 	$(NULL)
 
-libudisks_lvm_la_CFLAGS = \
+libstoraged_la_CFLAGS = \
 	-I$(top_srcdir) \
-	-DG_LOG_DOMAIN=\"udisks-lvm\" \
+	-DG_LOG_DOMAIN=\"storaged\" \
 	$(GLIB_CFLAGS) \
 	$(GIO_CFLAGS) \
 	$(GUDEV_CFLAGS) \
@@ -70,7 +69,7 @@ libudisks_lvm_la_CFLAGS = \
 	$(UDISKS_CFLAGS) \
 	$(NULL)
 
-libudisks_lvm_la_LIBADD = \
+libstoraged_la_LIBADD = \
 	$(GLIB_LIBS) \
 	$(GIO_LIBS) \
 	$(GUDEV_LIBS) \
@@ -80,33 +79,33 @@ libudisks_lvm_la_LIBADD = \
 
 # ----------------------------------------------------------------------------------------------------
 
-udisksdprivdir = $(prefix)/lib/udisks2
-udisksdpriv_PROGRAMS = udisksd-lvm udisks-lvm-helper
+storagedprivdir = $(libdir)/storaged
+storagedpriv_PROGRAMS = storaged storaged-lvm-helper
 
-udisksd_lvm_SOURCES = \
+storaged_SOURCES = \
 	main.c \
 	$(NULL)
 
-udisksd_lvm_CFLAGS = \
-	-DG_LOG_DOMAIN=\"udisks-lvm\" \
+storaged_CFLAGS = \
+	-DG_LOG_DOMAIN=\"storaged\" \
 	$(UDISKS_CFLAGS) \
 	$(NULL)
 
-udisksd_lvm_LDADD = \
+storaged_LDADD = \
 	$(GLIB_LIBS) \
 	$(GIO_LIBS) \
-	libudisks-lvm.la \
+	libstoraged.la \
 	$(NULL)
 
-udisks_lvm_helper_SOURCES = \
+storaged_lvm_helper_SOURCES = \
 	helper.c \
 	$(NULL)
 
-udisks_lvm_helper_CFLAGS = \
+storaged_lvm_helper_CFLAGS = \
 	$(LVM2_CFLAGS) \
 	$(NULL)
 
-udisks_lvm_helper_LDADD = \
+storaged_lvm_helper_LDADD = \
 	$(GLIB_LIBS) \
 	$(LVM2_LIBS) \
 	-llvm2app \

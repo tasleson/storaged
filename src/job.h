@@ -18,8 +18,8 @@
  *
  */
 
-#ifndef __UL_JOB_H__
-#define __UL_JOB_H__
+#ifndef __STORAGE_JOB_H__
+#define __STORAGE_JOB_H__
 
 #include <udisks/udisks.h>
 
@@ -27,58 +27,58 @@
 
 G_BEGIN_DECLS
 
-#define UL_TYPE_JOB         (ul_job_get_type ())
-#define UL_JOB(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_JOB, UlJob))
-#define UL_JOB_CLASS(k)     (G_TYPE_CHECK_CLASS_CAST((k), UL_TYPE_JOB, UlJobClass))
-#define UL_JOB_GET_CLASS(o) (G_TYPE_INSTANCE_GET_CLASS ((o), UL_TYPE_JOB, UlJobClass))
-#define UL_IS_JOB(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_JOB))
-#define UL_IS_JOB_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE ((k), UL_TYPE_JOB))
+#define STORAGE_TYPE_JOB         (storage_job_get_type ())
+#define STORAGE_JOB(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), STORAGE_TYPE_JOB, StorageJob))
+#define STORAGE_JOB_CLASS(k)     (G_TYPE_CHECK_CLASS_CAST((k), STORAGE_TYPE_JOB, StorageJobClass))
+#define STORAGE_JOB_GET_CLASS(o) (G_TYPE_INSTANCE_GET_CLASS ((o), STORAGE_TYPE_JOB, StorageJobClass))
+#define STORAGE_IS_JOB(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), STORAGE_TYPE_JOB))
+#define STORAGE_IS_JOB_CLASS(k)  (G_TYPE_CHECK_CLASS_TYPE ((k), STORAGE_TYPE_JOB))
 
-typedef struct _UlJobClass     UlJobClass;
-typedef struct _UlJobPrivate   UlJobPrivate;
+typedef struct _StorageJobClass     StorageJobClass;
+typedef struct _StorageJobPrivate   StorageJobPrivate;
 
 /**
- * UlJob:
+ * StorageJob:
  *
- * The #UlJob structure contains only private data and should
+ * The #StorageJob structure contains only private data and should
  * only be accessed using the provided API.
  */
-struct _UlJob
+struct _StorageJob
 {
   /*< private >*/
   UDisksJobSkeleton parent_instance;
-  UlJobPrivate *priv;
+  StorageJobPrivate *priv;
 };
 
 /**
- * UlJobClass:
+ * StorageJobClass:
  * @parent_class: Parent class.
  *
- * Class structure for #UlJob.
+ * Class structure for #StorageJob.
  */
-struct _UlJobClass
+struct _StorageJobClass
 {
   UDisksJobSkeletonClass parent_class;
   /*< private >*/
   gpointer padding[8];
 };
 
-typedef gboolean   (* UlJobFunc)                 (GCancellable *cancellable,
+typedef gboolean   (* StorageJobFunc)            (GCancellable *cancellable,
                                                   gpointer user_data,
                                                   GError **error);
 
-GType              ul_job_get_type               (void) G_GNUC_CONST;
+GType              storage_job_get_type          (void) G_GNUC_CONST;
 
-GCancellable *     ul_job_get_cancellable        (UlJob *self);
+GCancellable *     storage_job_get_cancellable   (StorageJob *self);
 
-gboolean           ul_job_get_auto_estimate      (UlJob *self);
+gboolean           storage_job_get_auto_estimate (StorageJob *self);
 
-void               ul_job_set_auto_estimate      (UlJob *self,
+void               storage_job_set_auto_estimate (StorageJob *self,
                                                   gboolean value);
 
-void               ul_job_add_thing              (UlJob *self,
+void               storage_job_add_thing         (StorageJob *self,
                                                   gpointer object_or_interface);
 
 G_END_DECLS
 
-#endif /* __UL_JOB_H__ */
+#endif /* __STORAGE_JOB_H__ */

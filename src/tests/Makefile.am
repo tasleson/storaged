@@ -53,5 +53,5 @@ noinst_PROGRAMS = \
 	$(NULL)
 
 test_jobs_LDADD = \
-	$(builddir)/../libudisks-lvm.la \
+	$(builddir)/../libstoraged.la \
 	$(NULL)

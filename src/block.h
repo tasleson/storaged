@@ -18,8 +18,8 @@
  *
  */
 
-#ifndef __UL_BLOCK_OBJECT_H__
-#define __UL_BLOCK_OBJECT_H__
+#ifndef __STORAGE_BLOCK_OBJECT_H__
+#define __STORAGE_BLOCK_OBJECT_H__
 
 #include <gio/gio.h>
 
@@ -29,46 +29,46 @@
 
 G_BEGIN_DECLS
 
-#define UL_TYPE_BLOCK         (ul_block_get_type ())
-#define UL_BLOCK(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_BLOCK, UlBlock))
-#define UL_IS_BLOCK(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_BLOCK))
+#define STORAGE_TYPE_BLOCK         (storage_block_get_type ())
+#define STORAGE_BLOCK(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), STORAGE_TYPE_BLOCK, StorageBlock))
+#define STORAGE_IS_BLOCK(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), STORAGE_TYPE_BLOCK))
 
-GType              ul_block_get_type         (void) G_GNUC_CONST;
+GType              storage_block_get_type         (void) G_GNUC_CONST;
 
-const gchar *      ul_block_get_object_path  (UlBlock *self);
+const gchar *      storage_block_get_object_path  (StorageBlock *self);
 
-GUdevDevice *      ul_block_get_udev         (UlBlock *self);
+GUdevDevice *      storage_block_get_udev         (StorageBlock *self);
 
-const gchar *      ul_block_get_device       (UlBlock *self);
+const gchar *      storage_block_get_device       (StorageBlock *self);
 
-const gchar **     ul_block_get_symlinks     (UlBlock *self);
+const gchar **     storage_block_get_symlinks     (StorageBlock *self);
 
-const gchar *      ul_block_get_id_type      (UlBlock *self);
+const gchar *      storage_block_get_id_type      (StorageBlock *self);
 
-const gchar *      ul_block_get_id_usage     (UlBlock *self);
+const gchar *      storage_block_get_id_usage     (StorageBlock *self);
 
-const gchar *      ul_block_get_id_version   (UlBlock *self);
+const gchar *      storage_block_get_id_version   (StorageBlock *self);
 
-const gchar *      ul_block_get_id_label     (UlBlock *self);
+const gchar *      storage_block_get_id_label     (StorageBlock *self);
 
-const gchar *      ul_block_get_id_uuid      (UlBlock *self);
+const gchar *      storage_block_get_id_uuid      (StorageBlock *self);
 
-void               ul_block_trigger_uevent   (UlBlock *self);
+void               storage_block_trigger_uevent   (StorageBlock *self);
 
-gboolean           ul_block_is_unused        (UlBlock *self,
-                                              GError **error);
+gboolean           storage_block_is_unused        (StorageBlock *self,
+                                                   GError **error);
 
-void               ul_block_update_lv        (UlBlock *self,
-                                              UlLogicalVolume *lv);
+void               storage_block_update_lv        (StorageBlock *self,
+                                                   StorageLogicalVolume *lv);
 
-void               ul_block_update_pv        (UlBlock *self,
-                                              UlVolumeGroup *group,
-                                              GVariant *pv_info);
+void               storage_block_update_pv        (StorageBlock *self,
+                                                   StorageVolumeGroup *group,
+                                                   GVariant *pv_info);
 
-LvmLogicalVolumeBlock  *ul_block_get_logical_volume_block  (UlBlock *self);
+LvmLogicalVolumeBlock  *  storage_block_get_logical_volume_block   (StorageBlock *self);
 
-LvmPhysicalVolumeBlock *ul_block_get_physical_volume_block (UlBlock *self);
+LvmPhysicalVolumeBlock *  storage_block_get_physical_volume_block  (StorageBlock *self);
 
 G_END_DECLS
 
-#endif /* __UL_BLOCK_OBJECT_H__ */
+#endif /* __STORAGE_BLOCK_OBJECT_H__ */

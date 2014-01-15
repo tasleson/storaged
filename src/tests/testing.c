@@ -299,7 +299,7 @@ control_master_start (void)
 
   /* Choose a unique path name */
   g_snprintf (control_path_arg, sizeof (control_path_arg),
-              "%s%s/udisks-test-ctrl.XXXXXX",
+              "%s%s/storaged-test-ctrl.XXXXXX",
               control_path_prefix, g_get_user_runtime_dir ());
   tempfd = g_mkstemp (control_path_arg + control_path_prefix_len);
   if (tempfd < 0)
@@ -642,7 +642,7 @@ testing_target_setup (GDBusConnection **connection,
   if (testing_target_name)
     {
       *daemon = testing_target_launch ("*Acquired*on the system message bus*",
-                                       BUILDDIR "/src/udisksd-lvm",
+                                       BUILDDIR "/src/storaged",
                                        "--resource-dir=" BUILDDIR "/src",
                                        "--replace", "--debug",
                                        NULL);
@@ -680,8 +680,8 @@ testing_target_vgname (void)
   /* Choose a volume group name that doesn't exist in listed */
   for (i = 0; i < 512; i++)
     {
-      vgname = g_strdup_printf ("test-udisks-%d", i);
-      encoded = ul_util_encode_lvm_name (vgname, FALSE);
+      vgname = g_strdup_printf ("test-storaged-%d", i);
+      encoded = storage_util_encode_lvm_name (vgname, FALSE);
       if (!strstr (vgdisplay, vgname) && !strstr (vgdisplay, encoded))
         break;
       g_free (encoded);

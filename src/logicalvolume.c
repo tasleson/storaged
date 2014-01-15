@@ -31,32 +31,32 @@
 #include "volumegroup.h"
 
 /**
- * SECTION:udiskslinuxlogicalvolume
- * @title: UlLogicalVolume
+ * SECTION:storagelogicalvolume
+ * @title: StorageLogicalVolume
  * @short_description: Linux implementation of #LvmLogicalVolume
  *
  * This type provides an implementation of the #LvmLogicalVolume
  * interface on Linux.
  */
 
-typedef struct _UlLogicalVolumeClass   UlLogicalVolumeClass;
+typedef struct _StorageLogicalVolumeClass   StorageLogicalVolumeClass;
 
 /**
- * UlLogicalVolume:
+ * StorageLogicalVolume:
  *
- * The #UlLogicalVolume structure contains only private data and should
+ * The #StorageLogicalVolume structure contains only private data and should
  * only be accessed using the provided API.
  */
-struct _UlLogicalVolume
+struct _StorageLogicalVolume
 {
   LvmLogicalVolumeSkeleton parent_instance;
 
   gchar *name;
   gboolean needs_publish;
-  UlVolumeGroup *volume_group;
+  StorageVolumeGroup *volume_group;
 };
 
-struct _UlLogicalVolumeClass
+struct _StorageLogicalVolumeClass
 {
   LvmLogicalVolumeSkeletonClass parent_class;
 };
@@ -71,61 +71,61 @@ enum
 
 static void logical_volume_iface_init (LvmLogicalVolumeIface *iface);
 
-G_DEFINE_TYPE_WITH_CODE (UlLogicalVolume, ul_logical_volume, LVM_TYPE_LOGICAL_VOLUME_SKELETON,
+G_DEFINE_TYPE_WITH_CODE (StorageLogicalVolume, storage_logical_volume, LVM_TYPE_LOGICAL_VOLUME_SKELETON,
                          G_IMPLEMENT_INTERFACE (LVM_TYPE_LOGICAL_VOLUME, logical_volume_iface_init)
 );
 
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
-ul_logical_volume_init (UlLogicalVolume *self)
+storage_logical_volume_init (StorageLogicalVolume *self)
 {
   self->needs_publish = TRUE;
 }
 
 static void
-ul_logical_volume_dispose (GObject *obj)
+storage_logical_volume_dispose (GObject *obj)
 {
-  UlLogicalVolume *self = UL_LOGICAL_VOLUME (obj);
+  StorageLogicalVolume *self = STORAGE_LOGICAL_VOLUME (obj);
   const gchar *path;
 
   self->needs_publish = FALSE;
-  path = ul_logical_volume_get_object_path (self);
+  path = storage_logical_volume_get_object_path (self);
   if (path != NULL)
-    ul_daemon_unpublish (ul_daemon_get (), path, self);
+    storage_daemon_unpublish (storage_daemon_get (), path, self);
 
-  G_OBJECT_CLASS (ul_logical_volume_parent_class)->dispose (obj);
+  G_OBJECT_CLASS (storage_logical_volume_parent_class)->dispose (obj);
 }
 
 static void
-ul_logical_volume_finalize (GObject *obj)
+storage_logical_volume_finalize (GObject *obj)
 {
-  UlLogicalVolume *self = UL_LOGICAL_VOLUME (obj);
+  StorageLogicalVolume *self = STORAGE_LOGICAL_VOLUME (obj);
 
   g_free (self->name);
 
-  G_OBJECT_CLASS (ul_logical_volume_parent_class)->finalize (obj);
+  G_OBJECT_CLASS (storage_logical_volume_parent_class)->finalize (obj);
 }
 
 static void
-ul_logical_volume_get_property (GObject *obj,
-                                guint prop_id,
-                                GValue *value,
-                                GParamSpec *pspec)
+storage_logical_volume_get_property (GObject *obj,
+                                     guint prop_id,
+                                     GValue *value,
+                                     GParamSpec *pspec)
 {
-  UlLogicalVolume *self = UL_LOGICAL_VOLUME (obj);
+  StorageLogicalVolume *self = STORAGE_LOGICAL_VOLUME (obj);
 
   switch (prop_id)
     {
     case PROP_NAME:
-      g_value_set_string (value, ul_logical_volume_get_name (self));
+      g_value_set_string (value, storage_logical_volume_get_name (self));
       break;
     case PROP_GROUP:
-      g_value_set_object (value, ul_logical_volume_get_volume_group (self));
+      g_value_set_object (value, storage_logical_volume_get_volume_group (self));
       break;
     case PROP_VOLUME_GROUP:
       if (self->volume_group)
-        g_value_set_string (value, ul_volume_group_get_object_path (self->volume_group));
+        g_value_set_string (value, storage_volume_group_get_object_path (self->volume_group));
       else
         g_value_set_string (value, "/");
       break;
@@ -136,12 +136,12 @@ ul_logical_volume_get_property (GObject *obj,
 }
 
 static void
-ul_logical_volume_set_property (GObject *obj,
-                                guint prop_id,
-                                const GValue *value,
-                                GParamSpec *pspec)
+storage_logical_volume_set_property (GObject *obj,
+                                     guint prop_id,
+                                     const GValue *value,
+                                     GParamSpec *pspec)
 {
-  UlLogicalVolume *self = UL_LOGICAL_VOLUME (obj);
+  StorageLogicalVolume *self = STORAGE_LOGICAL_VOLUME (obj);
 
   switch (prop_id)
     {
@@ -150,7 +150,7 @@ ul_logical_volume_set_property (GObject *obj,
       self->name = g_value_dup_string (value);
       break;
     case PROP_GROUP:
-      ul_logical_volume_set_volume_group (self, g_value_get_object (value));
+      storage_logical_volume_set_volume_group (self, g_value_get_object (value));
       break;
     case PROP_VOLUME_GROUP:
       g_assert_not_reached ();
@@ -162,18 +162,18 @@ ul_logical_volume_set_property (GObject *obj,
 }
 
 static void
-ul_logical_volume_class_init (UlLogicalVolumeClass *klass)
+storage_logical_volume_class_init (StorageLogicalVolumeClass *klass)
 {
   GObjectClass *gobject_class;
 
   gobject_class = G_OBJECT_CLASS (klass);
-  gobject_class->dispose = ul_logical_volume_dispose;
-  gobject_class->finalize = ul_logical_volume_finalize;
-  gobject_class->set_property = ul_logical_volume_set_property;
-  gobject_class->get_property = ul_logical_volume_get_property;
+  gobject_class->dispose = storage_logical_volume_dispose;
+  gobject_class->finalize = storage_logical_volume_finalize;
+  gobject_class->set_property = storage_logical_volume_set_property;
+  gobject_class->get_property = storage_logical_volume_get_property;
 
   /**
-   * UlLogicalVolumeObject:name:
+   * StorageLogicalVolumeObject:name:
    *
    * The name of the logical volume.
    */
@@ -188,7 +188,7 @@ ul_logical_volume_class_init (UlLogicalVolumeClass *klass)
                                                         G_PARAM_STATIC_STRINGS));
 
   /**
-    * UlLogicalVolume:group:
+    * StorageLogicalVolume:group:
     *
     * The volume group.
     */
@@ -197,13 +197,13 @@ ul_logical_volume_class_init (UlLogicalVolumeClass *klass)
                                     g_param_spec_object ("group",
                                                          "Volume Group",
                                                          "The volume group as an object",
-                                                         UL_TYPE_VOLUME_GROUP,
+                                                         STORAGE_TYPE_VOLUME_GROUP,
                                                          G_PARAM_READABLE |
                                                          G_PARAM_WRITABLE |
                                                          G_PARAM_STATIC_STRINGS));
 
    /**
-     * UlLogicalVolume:volume_group:
+     * StorageLogicalVolume:volume_group:
      *
      * The volume group.
      */
@@ -219,20 +219,20 @@ ul_logical_volume_class_init (UlLogicalVolumeClass *klass)
 }
 
 /**
- * ul_logical_volume_new:
+ * storage_logical_volume_new:
  *
- * Creates a new #UlLogicalVolume instance.
+ * Creates a new #StorageLogicalVolume instance.
  *
- * Returns: A new #UlLogicalVolume. Free with g_object_unref().
+ * Returns: A new #StorageLogicalVolume. Free with g_object_unref().
  */
-UlLogicalVolume *
-ul_logical_volume_new (UlVolumeGroup *group,
-                       const gchar *name)
+StorageLogicalVolume *
+storage_logical_volume_new (StorageVolumeGroup *group,
+                            const gchar *name)
 {
-  g_return_val_if_fail (UL_IS_VOLUME_GROUP (group), NULL);
+  g_return_val_if_fail (STORAGE_IS_VOLUME_GROUP (group), NULL);
   g_return_val_if_fail (name != NULL, NULL);
 
-  return g_object_new (UL_TYPE_LOGICAL_VOLUME,
+  return g_object_new (STORAGE_TYPE_LOGICAL_VOLUME,
                        "group", group,
                        "name", name,
                        NULL);
@@ -241,18 +241,18 @@ ul_logical_volume_new (UlVolumeGroup *group,
 /* ---------------------------------------------------------------------------------------------------- */
 
 /**
- * ul_logical_volume_update:
- * @logical_volume: A #UlLogicalVolume.
+ * storage_logical_volume_update:
+ * @logical_volume: A #StorageLogicalVolume.
  * @vg: LVM volume group
  * @lv: LVM logical volume
  *
  * Updates the interface.
  */
 void
-ul_logical_volume_update (UlLogicalVolume *self,
-                          UlVolumeGroup *group,
-                          GVariant *info,
-                          gboolean *needs_polling_ret)
+storage_logical_volume_update (StorageLogicalVolume *self,
+                               StorageVolumeGroup *group,
+                               GVariant *info,
+                               gboolean *needs_polling_ret)
 {
   LvmLogicalVolume *iface;
   const char *type;
@@ -266,7 +266,7 @@ ul_logical_volume_update (UlLogicalVolume *self,
 
   if (g_variant_lookup (info, "name", "&s", &str))
     {
-      gchar *decoded = ul_util_decode_lvm_name (str);
+      gchar *decoded = storage_util_decode_lvm_name (str);
       lvm_logical_volume_set_display_name (iface, decoded);
       g_free (decoded);
     }
@@ -321,9 +321,9 @@ ul_logical_volume_update (UlLogicalVolume *self,
   if (g_variant_lookup (info, "pool_lv", "&s", &str)
       && str != NULL && *str)
     {
-      UlLogicalVolume *pool = ul_volume_group_find_logical_volume (group, str);
+      StorageLogicalVolume *pool = storage_volume_group_find_logical_volume (group, str);
       if (pool)
-        pool_objpath = ul_logical_volume_get_object_path (pool);
+        pool_objpath = storage_logical_volume_get_object_path (pool);
     }
   lvm_logical_volume_set_thin_pool (iface, pool_objpath);
 
@@ -331,20 +331,20 @@ ul_logical_volume_update (UlLogicalVolume *self,
   if (g_variant_lookup (info, "origin", "&s", &str)
       && str != NULL && *str)
     {
-      UlLogicalVolume *origin = ul_volume_group_find_logical_volume (group, str);
+      StorageLogicalVolume *origin = storage_volume_group_find_logical_volume (group, str);
       if (origin)
-        origin_objpath = ul_logical_volume_get_object_path (origin);
+        origin_objpath = storage_logical_volume_get_object_path (origin);
     }
   lvm_logical_volume_set_origin (iface, origin_objpath);
 
-  ul_logical_volume_set_volume_group (self, group);
+  storage_logical_volume_set_volume_group (self, group);
 
   if (self->needs_publish)
     {
       self->needs_publish = FALSE;
-      path = ul_util_build_object_path (ul_volume_group_get_object_path (group),
-                                        ul_logical_volume_get_name (self), NULL);
-      ul_daemon_publish (ul_daemon_get (), path, FALSE, self);
+      path = storage_util_build_object_path (storage_volume_group_get_object_path (group),
+                                             storage_logical_volume_get_name (self), NULL);
+      storage_daemon_publish (storage_daemon_get (), path, FALSE, self);
       g_free (path);
     }
 }
@@ -392,22 +392,22 @@ handle_delete (LvmLogicalVolume *volume,
                GDBusMethodInvocation *invocation,
                GVariant *options)
 {
-  UlLogicalVolume *self = UL_LOGICAL_VOLUME (volume);
+  StorageLogicalVolume *self = STORAGE_LOGICAL_VOLUME (volume);
   gchar *full_name = NULL;
-  UlVolumeGroup *group;
-  UlDaemon *daemon;
-  UlJob *job;
+  StorageVolumeGroup *group;
+  StorageDaemon *daemon;
+  StorageJob *job;
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
-  group = ul_logical_volume_get_volume_group (self);
+  group = storage_logical_volume_get_volume_group (self);
   full_name = g_strdup_printf ("%s/%s",
-                               ul_volume_group_get_name (group),
-                               ul_logical_volume_get_name (self));
+                               storage_volume_group_get_name (group),
+                               storage_logical_volume_get_name (self));
 
-  job = ul_daemon_launch_spawned_job (daemon, self,
+  job = storage_daemon_launch_spawned_job (daemon, self,
                                       "lvm-lvol-delete",
-                                      ul_invocation_get_caller_uid (invocation),
+                                      storage_invocation_get_caller_uid (invocation),
                                       NULL, /* GCancellable */
                                       0,    /* uid_t run_as_uid */
                                       0,    /* uid_t run_as_euid */
@@ -424,17 +424,17 @@ handle_delete (LvmLogicalVolume *volume,
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
-on_rename_logical_volume (UlDaemon *daemon,
-                          UlLogicalVolume *volume,
+on_rename_logical_volume (StorageDaemon *daemon,
+                          StorageLogicalVolume *volume,
                           gpointer user_data)
 {
   CompleteClosure *complete = user_data;
 
-  if (g_str_equal (ul_logical_volume_get_name (volume), complete->wait_name) &&
-      ul_logical_volume_get_volume_group (volume) == UL_VOLUME_GROUP (complete->wait_thing))
+  if (g_str_equal (storage_logical_volume_get_name (volume), complete->wait_name) &&
+      storage_logical_volume_get_volume_group (volume) == STORAGE_VOLUME_GROUP (complete->wait_thing))
     {
       lvm_logical_volume_complete_rename (NULL, complete->invocation,
-                                          ul_logical_volume_get_object_path (volume));
+                                          storage_logical_volume_get_object_path (volume));
       g_signal_handler_disconnect (daemon, complete->wait_sig);
     }
 }
@@ -452,7 +452,7 @@ on_rename_complete (UDisksJob *job,
 
   g_dbus_method_invocation_return_error (complete->invocation, UDISKS_ERROR,
                                          UDISKS_ERROR_FAILED, "Error renaming logical volume: %s", message);
-  g_signal_handler_disconnect (ul_daemon_get (), complete->wait_sig);
+  g_signal_handler_disconnect (storage_daemon_get (), complete->wait_sig);
 }
 
 static gboolean
@@ -461,26 +461,26 @@ handle_rename (LvmLogicalVolume *volume,
                const gchar *new_name,
                GVariant *options)
 {
-  UlDaemon *daemon;
-  UlLogicalVolume *self = UL_LOGICAL_VOLUME (volume);
-  UlVolumeGroup *group;
+  StorageDaemon *daemon;
+  StorageLogicalVolume *self = STORAGE_LOGICAL_VOLUME (volume);
+  StorageVolumeGroup *group;
   gchar *full_name = NULL;
   gchar *encoded_new_name = NULL;
   gchar *error_message = NULL;
   CompleteClosure *complete;
-  UlJob *job;
+  StorageJob *job;
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
-  group = ul_logical_volume_get_volume_group (self);
+  group = storage_logical_volume_get_volume_group (self);
   full_name = g_strdup_printf ("%s/%s",
-                               ul_volume_group_get_name (group),
-                               ul_logical_volume_get_name (self));
-  encoded_new_name = ul_util_encode_lvm_name (new_name, TRUE);
+                               storage_volume_group_get_name (group),
+                               storage_logical_volume_get_name (self));
+  encoded_new_name = storage_util_encode_lvm_name (new_name, TRUE);
 
-  job = ul_daemon_launch_spawned_job (daemon, self,
+  job = storage_daemon_launch_spawned_job (daemon, self,
                                       "lvm-vg-rename",
-                                      ul_invocation_get_caller_uid (invocation),
+                                      storage_invocation_get_caller_uid (invocation),
                                       NULL, /* GCancellable */
                                       0,    /* uid_t run_as_uid */
                                       0,    /* uid_t run_as_euid */
@@ -497,7 +497,7 @@ handle_rename (LvmLogicalVolume *volume,
 
   /* Wait for the object to appear */
   complete->wait_sig = g_signal_connect_data (daemon,
-                                              "published::UlLogicalVolume",
+                                              "published::StorageLogicalVolume",
                                               G_CALLBACK (on_rename_logical_volume),
                                               complete, complete_closure_free, 0);
 
@@ -534,22 +534,22 @@ handle_resize (LvmLogicalVolume *volume,
                guint64 stripesize,
                GVariant *options)
 {
-  UlLogicalVolume *self = UL_LOGICAL_VOLUME (volume);
-  UlVolumeGroup *group;
-  UlDaemon *daemon;
-  UlJob *job;
+  StorageLogicalVolume *self = STORAGE_LOGICAL_VOLUME (volume);
+  StorageVolumeGroup *group;
+  StorageDaemon *daemon;
+  StorageJob *job;
   GPtrArray *args;
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
-  group = ul_logical_volume_get_volume_group (self);
+  group = storage_logical_volume_get_volume_group (self);
   new_size -= new_size % 512;
 
   args = g_ptr_array_new_with_free_func (g_free);
   g_ptr_array_add (args, g_strdup ("lvresize"));
   g_ptr_array_add (args, g_strdup_printf ("%s/%s",
-                                          ul_volume_group_get_name (group),
-                                          ul_logical_volume_get_name (self)));
+                                          storage_volume_group_get_name (group),
+                                          storage_logical_volume_get_name (self)));
   g_ptr_array_add (args, g_strdup_printf ("-L%" G_GUINT64_FORMAT "b", new_size));
 
   if (stripes > 0)
@@ -566,14 +566,14 @@ handle_resize (LvmLogicalVolume *volume,
 
   g_ptr_array_add (args, NULL);
 
-  job = ul_daemon_launch_spawned_jobv (daemon, self,
-                                       "lvm-vg-resize",
-                                       ul_invocation_get_caller_uid (invocation),
-                                       NULL, /* GCancellable */
-                                       0,    /* uid_t run_as_uid */
-                                       0,    /* uid_t run_as_euid */
-                                       NULL,  /* input_string */
-                                       (const gchar **)args->pdata);
+  job = storage_daemon_launch_spawned_jobv (daemon, self,
+                                            "lvm-vg-resize",
+                                            storage_invocation_get_caller_uid (invocation),
+                                            NULL, /* GCancellable */
+                                            0,    /* uid_t run_as_uid */
+                                            0,    /* uid_t run_as_euid */
+                                            NULL,  /* input_string */
+                                            (const gchar **)args->pdata);
 
   g_signal_connect_data (job, "completed", G_CALLBACK (on_resize_complete),
                          g_object_ref (invocation), (GClosureNotify)g_object_unref, 0);
@@ -585,16 +585,16 @@ handle_resize (LvmLogicalVolume *volume,
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
-on_activate_logical_volume_block (UlDaemon *daemon,
+on_activate_logical_volume_block (StorageDaemon *daemon,
                                   LvmLogicalVolumeBlock *block,
                                   gpointer user_data)
 {
   CompleteClosure *complete = user_data;
-  UlLogicalVolume *volume = complete->wait_thing;
+  StorageLogicalVolume *volume = complete->wait_thing;
   const gchar *path;
 
   if (g_strcmp0 (lvm_logical_volume_block_get_logical_volume (block),
-                 ul_logical_volume_get_object_path (volume)) == 0)
+                 storage_logical_volume_get_object_path (volume)) == 0)
     {
       path = g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (block));
       lvm_logical_volume_complete_activate (NULL, complete->invocation, path);
@@ -615,7 +615,7 @@ on_activate_complete (UDisksJob *job,
 
   g_dbus_method_invocation_return_error (complete->invocation, UDISKS_ERROR, UDISKS_ERROR_FAILED,
                                          "Error activating logical volume: %s", message);
-  g_signal_handler_disconnect (ul_daemon_get (), complete->wait_sig);
+  g_signal_handler_disconnect (storage_daemon_get (), complete->wait_sig);
 }
 
 static gboolean
@@ -623,26 +623,26 @@ handle_activate (LvmLogicalVolume *volume,
                  GDBusMethodInvocation *invocation,
                  GVariant *options)
 {
-  UlLogicalVolume *self = UL_LOGICAL_VOLUME (volume);
-  UlVolumeGroup *group;
-  UlDaemon *daemon;
+  StorageLogicalVolume *self = STORAGE_LOGICAL_VOLUME (volume);
+  StorageVolumeGroup *group;
+  StorageDaemon *daemon;
   gchar *full_name = NULL;
   CompleteClosure *complete;
-  UlJob *job;
+  StorageJob *job;
 
-  daemon = ul_daemon_get ();
-  group = ul_logical_volume_get_volume_group (self);
-  full_name = g_strdup_printf ("%s/%s", ul_volume_group_get_name (group),
-                               ul_logical_volume_get_name (self));
+  daemon = storage_daemon_get ();
+  group = storage_logical_volume_get_volume_group (self);
+  full_name = g_strdup_printf ("%s/%s", storage_volume_group_get_name (group),
+                               storage_logical_volume_get_name (self));
 
-  job = ul_daemon_launch_spawned_job (daemon, self,
-                                      "lvm-lvol-activate",
-                                      ul_invocation_get_caller_uid (invocation),
-                                      NULL, /* GCancellable */
-                                      0,    /* uid_t run_as_uid */
-                                      0,    /* uid_t run_as_euid */
-                                      NULL,  /* input_string */
-                                      "lvchange", full_name, "-a", "y", NULL);
+  job = storage_daemon_launch_spawned_job (daemon, self,
+                                           "lvm-lvol-activate",
+                                           storage_invocation_get_caller_uid (invocation),
+                                           NULL, /* GCancellable */
+                                           0,    /* uid_t run_as_uid */
+                                           0,    /* uid_t run_as_euid */
+                                           NULL,  /* input_string */
+                                           "lvchange", full_name, "-a", "y", NULL);
 
   complete = g_new0 (CompleteClosure, 1);
   complete->wait_thing = g_object_ref (self);
@@ -686,26 +686,26 @@ handle_deactivate (LvmLogicalVolume *volume,
                    GDBusMethodInvocation *invocation,
                    GVariant *options)
 {
-  UlLogicalVolume *self = UL_LOGICAL_VOLUME (volume);
-  UlVolumeGroup *group;
-  UlDaemon *daemon;
+  StorageLogicalVolume *self = STORAGE_LOGICAL_VOLUME (volume);
+  StorageVolumeGroup *group;
+  StorageDaemon *daemon;
   gchar *full_name = NULL;
-  UlJob *job = NULL;
+  StorageJob *job = NULL;
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
-  group = ul_logical_volume_get_volume_group (self);
-  full_name = g_strdup_printf ("%s/%s", ul_volume_group_get_name (group),
-                               ul_logical_volume_get_name (self));
+  group = storage_logical_volume_get_volume_group (self);
+  full_name = g_strdup_printf ("%s/%s", storage_volume_group_get_name (group),
+                               storage_logical_volume_get_name (self));
 
-  job = ul_daemon_launch_spawned_job (daemon, self,
-                                      "lvm-lvol-deactivate",
-                                      ul_invocation_get_caller_uid (invocation),
-                                      NULL, /* GCancellable */
-                                      0,    /* uid_t run_as_uid */
-                                      0,    /* uid_t run_as_euid */
-                                      NULL,  /* input_string */
-                                      "lvchange", full_name, "-a", "n", NULL);
+  job = storage_daemon_launch_spawned_job (daemon, self,
+                                           "lvm-lvol-deactivate",
+                                           storage_invocation_get_caller_uid (invocation),
+                                           NULL, /* GCancellable */
+                                           0,    /* uid_t run_as_uid */
+                                           0,    /* uid_t run_as_euid */
+                                           NULL,  /* input_string */
+                                           "lvchange", full_name, "-a", "n", NULL);
 
   g_signal_connect_data (job, "completed", G_CALLBACK (on_deactivate_complete),
                          g_object_ref (invocation), (GClosureNotify)g_object_unref, 0);
@@ -717,17 +717,17 @@ handle_deactivate (LvmLogicalVolume *volume,
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
-on_snapshot_logical_volume (UlDaemon *daemon,
-                            UlLogicalVolume *volume,
+on_snapshot_logical_volume (StorageDaemon *daemon,
+                            StorageLogicalVolume *volume,
                             gpointer user_data)
 {
   CompleteClosure *complete = user_data;
 
-  if (g_str_equal (ul_logical_volume_get_name (volume), complete->wait_name) &&
-      ul_logical_volume_get_volume_group (volume) == UL_VOLUME_GROUP (complete->wait_thing))
+  if (g_str_equal (storage_logical_volume_get_name (volume), complete->wait_name) &&
+      storage_logical_volume_get_volume_group (volume) == STORAGE_VOLUME_GROUP (complete->wait_thing))
     {
       lvm_logical_volume_complete_rename (NULL, complete->invocation,
-                                          ul_logical_volume_get_object_path (volume));
+                                          storage_logical_volume_get_object_path (volume));
       g_signal_handler_disconnect (daemon, complete->wait_sig);
     }
 }
@@ -745,7 +745,7 @@ on_snapshot_complete (UDisksJob *job,
 
   g_dbus_method_invocation_return_error (complete->invocation, UDISKS_ERROR,
                                          UDISKS_ERROR_FAILED, "Error creating snapshot: %s", message);
-  g_signal_handler_disconnect (ul_daemon_get (), complete->wait_sig);
+  g_signal_handler_disconnect (storage_daemon_get (), complete->wait_sig);
 }
 
 static gboolean
@@ -755,24 +755,24 @@ handle_create_snapshot (LvmLogicalVolume *volume,
                         guint64 size,
                         GVariant *options)
 {
-  UlLogicalVolume *self = UL_LOGICAL_VOLUME (volume);
-  UlVolumeGroup *group;
-  UlDaemon *daemon;
+  StorageLogicalVolume *self = STORAGE_LOGICAL_VOLUME (volume);
+  StorageVolumeGroup *group;
+  StorageDaemon *daemon;
   gchar *encoded_volume_name = NULL;
   CompleteClosure *complete;
-  UlJob *job;
+  StorageJob *job;
   GPtrArray *args;
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
-  group = ul_logical_volume_get_volume_group (self);
-  encoded_volume_name = ul_util_encode_lvm_name (name, TRUE);
+  group = storage_logical_volume_get_volume_group (self);
+  encoded_volume_name = storage_util_encode_lvm_name (name, TRUE);
 
   args = g_ptr_array_new_with_free_func (g_free);
   g_ptr_array_add (args, g_strdup ("lvcreate"));
   g_ptr_array_add (args, g_strdup ("-s"));
-  g_ptr_array_add (args, g_strdup_printf ("%s/%s", ul_volume_group_get_name (group),
-                                          ul_logical_volume_get_name (self)));
+  g_ptr_array_add (args, g_strdup_printf ("%s/%s", storage_volume_group_get_name (group),
+                                          storage_logical_volume_get_name (self)));
   g_ptr_array_add (args, g_strdup ("-n"));
   g_ptr_array_add (args, g_strdup (encoded_volume_name));
 
@@ -783,14 +783,14 @@ handle_create_snapshot (LvmLogicalVolume *volume,
     }
 
   g_ptr_array_add (args, NULL);
-  job = ul_daemon_launch_spawned_jobv (daemon, self,
-                                       "lvm-lvol-snapshot",
-                                       ul_invocation_get_caller_uid (invocation),
-                                       NULL, /* GCancellable */
-                                       0,    /* uid_t run_as_uid */
-                                       0,    /* uid_t run_as_euid */
-                                       NULL,  /* input_string */
-                                       (const gchar **)args->pdata);
+  job = storage_daemon_launch_spawned_jobv (daemon, self,
+                                            "lvm-lvol-snapshot",
+                                            storage_invocation_get_caller_uid (invocation),
+                                            NULL, /* GCancellable */
+                                            0,    /* uid_t run_as_uid */
+                                            0,    /* uid_t run_as_euid */
+                                            NULL,  /* input_string */
+                                            (const gchar **)args->pdata);
 
   complete = g_new0 (CompleteClosure, 1);
   complete->wait_name = encoded_volume_name;
@@ -802,7 +802,7 @@ handle_create_snapshot (LvmLogicalVolume *volume,
 
   /* Wait for the object to appear */
   complete->wait_sig = g_signal_connect_data (daemon,
-                                              "published::UlLogicalVolume",
+                                              "published::StorageLogicalVolume",
                                               G_CALLBACK (on_snapshot_logical_volume),
                                               complete, complete_closure_free, 0);
 
@@ -824,31 +824,31 @@ logical_volume_iface_init (LvmLogicalVolumeIface *iface)
 }
 
 const gchar *
-ul_logical_volume_get_name (UlLogicalVolume *self)
+storage_logical_volume_get_name (StorageLogicalVolume *self)
 {
-  g_return_val_if_fail (UL_IS_LOGICAL_VOLUME (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_LOGICAL_VOLUME (self), NULL);
   return self->name;
 }
 
 const gchar *
-ul_logical_volume_get_object_path (UlLogicalVolume *self)
+storage_logical_volume_get_object_path (StorageLogicalVolume *self)
 {
-  g_return_val_if_fail (UL_IS_LOGICAL_VOLUME (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_LOGICAL_VOLUME (self), NULL);
   return g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (self));
 }
 
-UlVolumeGroup *
-ul_logical_volume_get_volume_group (UlLogicalVolume *self)
+StorageVolumeGroup *
+storage_logical_volume_get_volume_group (StorageLogicalVolume *self)
 {
-  g_return_val_if_fail (UL_IS_LOGICAL_VOLUME (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_LOGICAL_VOLUME (self), NULL);
   return self->volume_group;
 }
 
 void
-ul_logical_volume_set_volume_group (UlLogicalVolume *self,
-                                    UlVolumeGroup *group)
+storage_logical_volume_set_volume_group (StorageLogicalVolume *self,
+                                         StorageVolumeGroup *group)
 {
-  g_return_if_fail (UL_IS_LOGICAL_VOLUME (self));
+  g_return_if_fail (STORAGE_IS_LOGICAL_VOLUME (self));
 
   g_clear_object (&self->volume_group);
   if (group != NULL)

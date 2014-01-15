@@ -34,8 +34,8 @@
 
 #include <udisks/udisks.h>
 
-/**
- * udisks_safe_append_to_object_path:
+/*
+ * safe_append_to_object_path:
  * @str: A #GString to append to.
  * @s: A UTF-8 string.
  *
@@ -72,9 +72,9 @@ safe_append_to_object_path (GString *str,
 }
 
 gchar *
-ul_util_build_object_path (const gchar *base,
-                           const gchar *part,
-                           ...)
+storage_util_build_object_path (const gchar *base,
+                                const gchar *part,
+                                ...)
 {
   GString *path;
   va_list va;
@@ -97,7 +97,7 @@ ul_util_build_object_path (const gchar *base,
 }
 
 gboolean
-ul_util_lvm_name_is_reserved (const gchar *name)
+storage_util_lvm_name_is_reserved (const gchar *name)
 {
   /* XXX - get this from lvm2app */
 
@@ -127,8 +127,8 @@ valid_lvm_name_char (gint c)
 #define LVM_ENCODING_PREFIX "+_"
 
 gchar *
-ul_util_encode_lvm_name (const gchar *name,
-                         gboolean for_logical_volume)
+storage_util_encode_lvm_name (const gchar *name,
+                              gboolean for_logical_volume)
 {
   const gchar *n;
   GString *enc;
@@ -146,7 +146,7 @@ ul_util_encode_lvm_name (const gchar *name,
   if (g_str_has_prefix (name, LVM_ENCODING_PREFIX))
     goto encode;
 
-  if (for_logical_volume && ul_util_lvm_name_is_reserved (name))
+  if (for_logical_volume && storage_util_lvm_name_is_reserved (name))
     goto encode;
 
   return g_strdup (name);
@@ -166,7 +166,7 @@ ul_util_encode_lvm_name (const gchar *name,
 }
 
 gchar *
-ul_util_decode_lvm_name (const gchar *encoded)
+storage_util_decode_lvm_name (const gchar *encoded)
 {
   const gchar *e;
   GString *dec;
@@ -201,8 +201,8 @@ ul_util_decode_lvm_name (const gchar *encoded)
 }
 
 gboolean
-ul_util_wipe_block (const gchar *device_file,
-                    GError **error)
+storage_util_wipe_block (const gchar *device_file,
+                         GError **error)
 {
   int fd = -1;
   gchar zeroes[512];
@@ -311,11 +311,11 @@ get_signal_name (gint signal_number)
 }
 
 gboolean
-ul_util_check_status_and_output (const gchar *cmd,
-                                 gint status,
-                                 const gchar *standard_out,
-                                 const gchar *standard_error,
-                                 GError **error)
+storage_util_check_status_and_output (const gchar *cmd,
+                                      gint status,
+                                      const gchar *standard_out,
+                                      const gchar *standard_error,
+                                      GError **error)
 {
   GString *message;
 

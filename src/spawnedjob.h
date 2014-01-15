@@ -18,8 +18,8 @@
  *
  */
 
-#ifndef __UL_SPAWNED_JOB_H__
-#define __UL_SPAWNED_JOB_H__
+#ifndef __STORAGE_SPAWNED_JOB_H__
+#define __STORAGE_SPAWNED_JOB_H__
 
 #include <gio/gio.h>
 
@@ -27,20 +27,20 @@
 
 G_BEGIN_DECLS
 
-#define UL_TYPE_SPAWNED_JOB         (ul_spawned_job_get_type ())
-#define UL_SPAWNED_JOB(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_SPAWNED_JOB, UlSpawnedJob))
-#define UL_IS_SPAWNED_JOB(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_SPAWNED_JOB))
+#define STORAGE_TYPE_SPAWNED_JOB         (storage_spawned_job_get_type ())
+#define STORAGE_SPAWNED_JOB(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), STORAGE_TYPE_SPAWNED_JOB, StorageSpawnedJob))
+#define STORAGE_IS_SPAWNED_JOB(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), STORAGE_TYPE_SPAWNED_JOB))
 
-GType              ul_spawned_job_get_type         (void) G_GNUC_CONST;
+GType                 storage_spawned_job_get_type  (void) G_GNUC_CONST;
 
-UlSpawnedJob  *    ul_spawned_job_new              (const gchar **argv,
-                                                    const gchar *input_string,
-                                                    uid_t run_as_uid,
-                                                    uid_t run_as_euid,
-                                                    GCancellable *cancellable);
+StorageSpawnedJob  *  storage_spawned_job_new       (const gchar **argv,
+                                                     const gchar *input_string,
+                                                     uid_t run_as_uid,
+                                                     uid_t run_as_euid,
+                                                     GCancellable *cancellable);
 
-const gchar **     ul_spawned_job_get_argv         (UlSpawnedJob *job);
+const gchar **        storage_spawned_job_get_argv  (StorageSpawnedJob *job);
 
 G_END_DECLS
 
-#endif /* __UL_SPAWNED_JOB_H__ */
+#endif /* __STORAGE_SPAWNED_JOB_H__ */

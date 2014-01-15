@@ -19,25 +19,25 @@
  *
  */
 
-#ifndef __UL_PHYSICAL_VOLUME_H__
-#define __UL_PHYSICAL_VOLUME_H__
+#ifndef __STORAGE_PHYSICAL_VOLUME_H__
+#define __STORAGE_PHYSICAL_VOLUME_H__
 
 #include "types.h"
 
 G_BEGIN_DECLS
 
-#define UL_TYPE_PHYSICAL_VOLUME         (ul_physical_volume_get_type ())
-#define UL_PHYSICAL_VOLUME(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_PHYSICAL_VOLUME, UlPhysicalVolume))
-#define UL_IS_PHYSICAL_VOLUME(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_PHYSICAL_VOLUME))
+#define STORAGE_TYPE_PHYSICAL_VOLUME         (storage_physical_volume_get_type ())
+#define STORAGE_PHYSICAL_VOLUME(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), STORAGE_TYPE_PHYSICAL_VOLUME, StoragePhysicalVolume))
+#define STORAGE_IS_PHYSICAL_VOLUME(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), STORAGE_TYPE_PHYSICAL_VOLUME))
 
-GType                 ul_physical_volume_get_type   (void) G_GNUC_CONST;
+GType                    storage_physical_volume_get_type   (void) G_GNUC_CONST;
 
-UlPhysicalVolume *    ul_physical_volume_new        (void);
+StoragePhysicalVolume *  storage_physical_volume_new        (void);
 
-void                  ul_physical_volume_update     (UlPhysicalVolume *self,
-                                                     UlVolumeGroup *group,
-                                                     GVariant *info);
+void                     storage_physical_volume_update     (StoragePhysicalVolume *self,
+                                                             StorageVolumeGroup *group,
+                                                             GVariant *info);
 
 G_END_DECLS
 
-#endif /* __UL_PHYSICAL_VOLUME_H__ */
+#endif /* __STORAGE_PHYSICAL_VOLUME_H__ */

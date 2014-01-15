@@ -18,13 +18,13 @@
  *
  */
 
-/* This is a helper program used by UDisks2 to query the state of
+/* This is a helper program used by storaged to query the state of
    LVM2 via the lvm2app library.
 
    The reasoning for doing this in a separate process goes like this:
    Calling lvm_vg_open might block for a long time when the volume
    group is locked by someone else.  When this happens, only that one
-   volume group should be affected.  No other part of UDisks and no
+   volume group should be affected.  No other part of storaged and no
    other volume group updates should wait for it.  It doesn't seem to
    be possible to set "wait_for_locks" temporarily when using lvm2app,
    and we actually do want to wait the short amounts of time that a
@@ -46,8 +46,8 @@
 static void
 usage (void)
 {
-  fprintf (stderr, "Usage: udisks-lvm [-b] list\n");
-  fprintf (stderr, "       udisks-lvm [-b] show VG\n");
+  fprintf (stderr, "Usage: storaged-lvm-helper [-b] list\n");
+  fprintf (stderr, "       storaged-lvm-helper [-b] show VG\n");
   exit (1);
 }
 

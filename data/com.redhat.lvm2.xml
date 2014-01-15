@@ -65,7 +65,7 @@
     logical volumes. It appears at the same object paths as the blocks
     exposed by udisks via the org.freedesktop.UDisks2.Block interface.
 
-    Explanation: This is separate from the org.freedesktop.UDisks2.LogicalVolume
+    Explanation: This is separate from the com.redhat.lvm2.LogicalVolume
     interface because not all logical volumes are 'activated' and as such
     are not all valid blocks.
   -->
@@ -101,7 +101,7 @@
 
       The logical volume objects of a volume group are the children of
       the volume group objects in the D-Bus object hierarchy.  See the
-      #org.freedesktop.UDisks2.LogicalVolume interface.
+      #com.redhat.lvm2.LogicalVolume interface.
 
       The physical volume objects of a volume group can be found by
       looking for block devices with a

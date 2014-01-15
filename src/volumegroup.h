@@ -18,35 +18,35 @@
  *
  */
 
-#ifndef __UL_VOLUME_GROUP_H__
-#define __UL_VOLUME_GROUP_H__
+#ifndef __STORAGE_VOLUME_GROUP_H__
+#define __STORAGE_VOLUME_GROUP_H__
 
 #include "types.h"
 
 G_BEGIN_DECLS
 
-#define UL_TYPE_VOLUME_GROUP         (ul_volume_group_get_type ())
-#define UL_VOLUME_GROUP(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_VOLUME_GROUP, UlVolumeGroup))
-#define UL_IS_VOLUME_GROUP(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_VOLUME_GROUP))
+#define STORAGE_TYPE_VOLUME_GROUP         (storage_volume_group_get_type ())
+#define STORAGE_VOLUME_GROUP(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), STORAGE_TYPE_VOLUME_GROUP, StorageVolumeGroup))
+#define STORAGE_IS_VOLUME_GROUP(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), STORAGE_TYPE_VOLUME_GROUP))
 
-GType              ul_volume_group_get_type            (void) G_GNUC_CONST;
+GType                   storage_volume_group_get_type            (void) G_GNUC_CONST;
 
-UlVolumeGroup *    ul_volume_group_new                 (const gchar *name);
+StorageVolumeGroup *    storage_volume_group_new                 (const gchar *name);
 
-const gchar *      ul_volume_group_get_name            (UlVolumeGroup *self);
+const gchar *           storage_volume_group_get_name            (StorageVolumeGroup *self);
 
-const gchar *      ul_volume_group_get_object_path     (UlVolumeGroup *self);
+const gchar *           storage_volume_group_get_object_path     (StorageVolumeGroup *self);
 
-void               ul_volume_group_update              (UlVolumeGroup *self);
+void                    storage_volume_group_update              (StorageVolumeGroup *self);
 
-void               ul_volume_group_poll                (UlVolumeGroup *self);
+void                    storage_volume_group_poll                (StorageVolumeGroup *self);
 
-UlLogicalVolume *  ul_volume_group_find_logical_volume (UlVolumeGroup *self,
-                                                        const gchar *name);
+StorageLogicalVolume *  storage_volume_group_find_logical_volume (StorageVolumeGroup *self,
+                                                                  const gchar *name);
 
-void               ul_volume_group_update_block        (UlVolumeGroup *self,
-                                                        UlBlock       *block);
+void                    storage_volume_group_update_block        (StorageVolumeGroup *self,
+                                                                  StorageBlock *block);
 
 G_END_DECLS
 
-#endif /* __UL_VOLUME_GROUP_H__ */
+#endif /* __STORAGE_VOLUME_GROUP_H__ */

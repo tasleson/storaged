@@ -37,25 +37,25 @@
 #include <stdlib.h>
 
 /**
- * SECTION:udisksspawnedjob
- * @title: UlSpawnedJob
+ * SECTION:storagespawnedjob
+ * @title: StorageSpawnedJob
  * @short_description: Job that spawns a command
  *
- * This type provides an implementation of the #UlJob interface
+ * This type provides an implementation of the #StorageJob interface
  * for jobs that are implemented by spawning a command line.
  */
 
-typedef struct _UlSpawnedJobClass   UlSpawnedJobClass;
+typedef struct _StorageSpawnedJobClass   StorageSpawnedJobClass;
 
 /**
- * UlSpawnedJob:
+ * StorageSpawnedJob:
  *
- * The #UlSpawnedJob structure contains only private data and should
+ * The #StorageSpawnedJob structure contains only private data and should
  * only be accessed using the provided API.
  */
-struct _UlSpawnedJob
+struct _StorageSpawnedJob
 {
-  UlJob parent_instance;
+  StorageJob parent_instance;
 
   gchar **argv;
   gulong cancellable_handler_id;
@@ -85,11 +85,11 @@ struct _UlSpawnedJob
   GString *child_stderr;
 };
 
-struct _UlSpawnedJobClass
+struct _StorageSpawnedJobClass
 {
-  UlJobClass parent_class;
+  StorageJobClass parent_class;
 
-  gboolean (*spawned_job_completed) (UlSpawnedJob *self,
+  gboolean (*spawned_job_completed) (StorageSpawnedJob *self,
                                      GError *error,
                                      gint status,
                                      GString *standard_output,
@@ -115,24 +115,24 @@ enum
 
 static guint signals[LAST_SIGNAL] = { 0 };
 
-static gboolean udisks_spawned_job_spawned_job_completed_default (UlSpawnedJob *self,
-                                                                  GError *error,
-                                                                  gint status,
-                                                                  GString *standard_output,
-                                                                  GString *standard_error);
+static gboolean storage_spawned_job_completed_default (StorageSpawnedJob *self,
+                                                       GError *error,
+                                                       gint status,
+                                                       GString *standard_output,
+                                                       GString *standard_error);
 
-static void udisks_spawned_job_release_resources (UlSpawnedJob *self);
+static void storage_spawned_job_release_resources (StorageSpawnedJob *self);
 
-G_DEFINE_TYPE_WITH_CODE (UlSpawnedJob, ul_spawned_job, UL_TYPE_JOB,
+G_DEFINE_TYPE_WITH_CODE (StorageSpawnedJob, storage_spawned_job, STORAGE_TYPE_JOB,
                          G_IMPLEMENT_INTERFACE (UDISKS_TYPE_JOB, job_iface_init)
 );
 
 static void
-ul_spawned_job_finalize (GObject *object)
+storage_spawned_job_finalize (GObject *object)
 {
-  UlSpawnedJob *self = UL_SPAWNED_JOB (object);
+  StorageSpawnedJob *self = STORAGE_SPAWNED_JOB (object);
 
-  udisks_spawned_job_release_resources (self);
+  storage_spawned_job_release_resources (self);
 
   if (self->main_context != NULL)
     g_main_context_unref (self->main_context);
@@ -146,21 +146,21 @@ ul_spawned_job_finalize (GObject *object)
       g_free (self->input_string);
     }
 
-  G_OBJECT_CLASS (ul_spawned_job_parent_class)->finalize (object);
+  G_OBJECT_CLASS (storage_spawned_job_parent_class)->finalize (object);
 }
 
 static void
-ul_spawned_job_get_property (GObject *object,
-                             guint prop_id,
-                             GValue *value,
-                             GParamSpec *pspec)
+storage_spawned_job_get_property (GObject *object,
+                                  guint prop_id,
+                                  GValue *value,
+                                  GParamSpec *pspec)
 {
-  UlSpawnedJob *self = UL_SPAWNED_JOB (object);
+  StorageSpawnedJob *self = STORAGE_SPAWNED_JOB (object);
 
   switch (prop_id)
     {
     case PROP_ARGV:
-      g_value_set_boxed (value, ul_spawned_job_get_argv (self));
+      g_value_set_boxed (value, storage_spawned_job_get_argv (self));
       break;
 
     default:
@@ -170,12 +170,12 @@ ul_spawned_job_get_property (GObject *object,
 }
 
 static void
-ul_spawned_job_set_property (GObject *object,
-                             guint prop_id,
-                             const GValue *value,
-                             GParamSpec *pspec)
+storage_spawned_job_set_property (GObject *object,
+                                  guint prop_id,
+                                  const GValue *value,
+                                  GParamSpec *pspec)
 {
-  UlSpawnedJob *self = UL_SPAWNED_JOB (object);
+  StorageSpawnedJob *self = STORAGE_SPAWNED_JOB (object);
 
   switch (prop_id)
     {
@@ -207,7 +207,7 @@ ul_spawned_job_set_property (GObject *object,
 
 typedef struct
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   GError *error;
 } EmitCompletedData;
 
@@ -232,13 +232,13 @@ emit_completed_with_error_in_idle_cb (gpointer user_data)
 }
 
 static void
-emit_completed_with_error_in_idle (UlSpawnedJob *self,
+emit_completed_with_error_in_idle (StorageSpawnedJob *self,
                                    GError *error)
 {
   EmitCompletedData *data;
   GSource *idle_source;
 
-  g_return_if_fail (UL_IS_SPAWNED_JOB (self));
+  g_return_if_fail (STORAGE_IS_SPAWNED_JOB (self));
   g_return_if_fail (error != NULL);
 
   data = g_new0 (EmitCompletedData, 1);
@@ -259,7 +259,7 @@ static void
 on_cancelled (GCancellable *cancellable,
               gpointer      user_data)
 {
-  UlSpawnedJob *self = UL_SPAWNED_JOB (user_data);
+  StorageSpawnedJob *self = STORAGE_SPAWNED_JOB (user_data);
   GError *error;
 
   error = NULL;
@@ -273,7 +273,7 @@ read_child_stderr (GIOChannel *channel,
                    GIOCondition condition,
                    gpointer user_data)
 {
-  UlSpawnedJob *self = UL_SPAWNED_JOB (user_data);
+  StorageSpawnedJob *self = STORAGE_SPAWNED_JOB (user_data);
   gchar buf[1024];
   gsize bytes_read;
 
@@ -287,7 +287,7 @@ read_child_stdout (GIOChannel *channel,
                    GIOCondition condition,
                    gpointer user_data)
 {
-  UlSpawnedJob *self = UL_SPAWNED_JOB (user_data);
+  StorageSpawnedJob *self = STORAGE_SPAWNED_JOB (user_data);
   gchar buf[1024];
   gsize bytes_read;
 
@@ -301,7 +301,7 @@ write_child_stdin (GIOChannel *channel,
                    GIOCondition condition,
                    gpointer user_data)
 {
-  UlSpawnedJob *self = UL_SPAWNED_JOB (user_data);
+  StorageSpawnedJob *self = STORAGE_SPAWNED_JOB (user_data);
   gsize bytes_written;
 
   if (self->input_string_cursor == NULL || *self->input_string_cursor == '\0')
@@ -333,7 +333,7 @@ child_watch_cb (GPid     pid,
                 gint     status,
                 gpointer user_data)
 {
-  UlSpawnedJob *self = UL_SPAWNED_JOB (user_data);
+  StorageSpawnedJob *self = STORAGE_SPAWNED_JOB (user_data);
   gchar *buf;
   gsize buf_size;
   gboolean ret;
@@ -361,7 +361,7 @@ child_watch_cb (GPid     pid,
                  &ret);
   self->child_pid = 0;
   self->child_watch_source = NULL;
-  udisks_spawned_job_release_resources (self);
+  storage_spawned_job_release_resources (self);
   g_object_unref (self);
 }
 
@@ -369,7 +369,7 @@ child_watch_cb (GPid     pid,
 static void
 child_setup (gpointer user_data)
 {
-  UlSpawnedJob *self = UL_SPAWNED_JOB (user_data);
+  StorageSpawnedJob *self = STORAGE_SPAWNED_JOB (user_data);
   struct passwd *pw;
   gid_t egid;
 
@@ -428,13 +428,13 @@ child_setup (gpointer user_data)
 }
 
 static void
-ul_spawned_job_constructed (GObject *object)
+storage_spawned_job_constructed (GObject *object)
 {
-  UlSpawnedJob *self = UL_SPAWNED_JOB (object);
+  StorageSpawnedJob *self = STORAGE_SPAWNED_JOB (object);
   GError *error;
   gchar *cmd;
 
-  G_OBJECT_CLASS (ul_spawned_job_parent_class)->constructed (object);
+  G_OBJECT_CLASS (storage_spawned_job_parent_class)->constructed (object);
 
   cmd = g_strjoinv (" ", self->argv);
   g_debug ("spawned job: %s", cmd);
@@ -445,14 +445,14 @@ ul_spawned_job_constructed (GObject *object)
 
   /* could already be cancelled */
   error = NULL;
-  if (g_cancellable_set_error_if_cancelled (ul_job_get_cancellable (UL_JOB (self)), &error))
+  if (g_cancellable_set_error_if_cancelled (storage_job_get_cancellable (STORAGE_JOB (self)), &error))
     {
       emit_completed_with_error_in_idle (self, error);
       g_error_free (error);
       goto out;
     }
 
-  self->cancellable_handler_id = g_cancellable_connect (ul_job_get_cancellable (UL_JOB (self)),
+  self->cancellable_handler_id = g_cancellable_connect (storage_job_get_cancellable (STORAGE_JOB (self)),
                                                         G_CALLBACK (on_cancelled),
                                                         self,
                                                         NULL);
@@ -512,7 +512,7 @@ out:
 }
 
 static void
-ul_spawned_job_init (UlSpawnedJob *self)
+storage_spawned_job_init (StorageSpawnedJob *self)
 {
   self->child_stdout = g_string_new (NULL);
   self->child_stderr = g_string_new (NULL);
@@ -522,20 +522,20 @@ ul_spawned_job_init (UlSpawnedJob *self)
 }
 
 static void
-ul_spawned_job_class_init (UlSpawnedJobClass *klass)
+storage_spawned_job_class_init (StorageSpawnedJobClass *klass)
 {
   GObjectClass *gobject_class;
 
-  klass->spawned_job_completed = udisks_spawned_job_spawned_job_completed_default;
+  klass->spawned_job_completed = storage_spawned_job_completed_default;
 
   gobject_class = G_OBJECT_CLASS (klass);
-  gobject_class->finalize = ul_spawned_job_finalize;
-  gobject_class->constructed = ul_spawned_job_constructed;
-  gobject_class->set_property = ul_spawned_job_set_property;
-  gobject_class->get_property = ul_spawned_job_get_property;
+  gobject_class->finalize = storage_spawned_job_finalize;
+  gobject_class->constructed = storage_spawned_job_constructed;
+  gobject_class->set_property = storage_spawned_job_set_property;
+  gobject_class->get_property = storage_spawned_job_get_property;
 
   /**
-   * UlSpawnedJob:argv:
+   * StorageSpawnedJob:argv:
    *
    * The command-line to run.
    */
@@ -551,7 +551,7 @@ ul_spawned_job_class_init (UlSpawnedJobClass *klass)
                                                        G_PARAM_STATIC_STRINGS));
 
   /**
-   * UlSpawnedJob:input-string:
+   * StorageSpawnedJob:input-string:
    *
    * String that will be written to stdin of the spawned program or
    * %NULL to not write anything.
@@ -567,7 +567,7 @@ ul_spawned_job_class_init (UlSpawnedJobClass *klass)
                                                         G_PARAM_STATIC_STRINGS));
 
   /**
-   * UlSpawnedJob:run-as-uid:
+   * StorageSpawnedJob:run-as-uid:
    *
    * The #uid_t to run the program as.
    */
@@ -582,7 +582,7 @@ ul_spawned_job_class_init (UlSpawnedJobClass *klass)
                                                       G_PARAM_STATIC_STRINGS));
 
   /**
-   * UlSpawnedJob:run-as-euid:
+   * StorageSpawnedJob:run-as-euid:
    *
    * The effective #uid_t to run the program as.
    */
@@ -597,8 +597,8 @@ ul_spawned_job_class_init (UlSpawnedJobClass *klass)
                                                       G_PARAM_STATIC_STRINGS));
 
   /**
-   * UlSpawnedJob::spawned-job-completed:
-   * @job: The #UlSpawnedJob emitting the signal.
+   * StorageSpawnedJob::spawned-job-completed:
+   * @job: The #StorageSpawnedJob emitting the signal.
    * @error: %NULL if running the whole command line succeeded, otherwise a #GError that is set.
    * @status: The exit status of the command line that was run.
    * @standard_output: Standard output from the command line that was run.
@@ -609,7 +609,7 @@ ul_spawned_job_class_init (UlSpawnedJobClass *klass)
    * non-%NULL. Otherwise you can use macros such as WIFEXITED() and
    * WEXITSTATUS() on the @status integer to obtain more information.
    *
-   * The default implementation simply emits the #UlJob::completed
+   * The default implementation simply emits the #StorageJob::completed
    * signal with @success set to %TRUE if, and only if, @error is
    * %NULL, WIFEXITED() evaluates to %TRUE and WEXITSTATUS() is
    * zero. Additionally, @message on that signal is set to
@@ -627,9 +627,9 @@ ul_spawned_job_class_init (UlSpawnedJobClass *klass)
    */
   signals[SPAWNED_JOB_COMPLETED_SIGNAL] =
     g_signal_new ("spawned-job-completed",
-                  UL_TYPE_SPAWNED_JOB,
+                  STORAGE_TYPE_SPAWNED_JOB,
                   G_SIGNAL_RUN_LAST,
-                  G_STRUCT_OFFSET (UlSpawnedJobClass, spawned_job_completed),
+                  G_STRUCT_OFFSET (StorageSpawnedJobClass, spawned_job_completed),
                   g_signal_accumulator_true_handled,
                   NULL,
                   g_cclosure_marshal_generic,
@@ -642,32 +642,32 @@ ul_spawned_job_class_init (UlSpawnedJobClass *klass)
 }
 
 /**
- * udisks_spawned_job_new:
+ * storage_spawned_job_new:
  * @argv: The command line to run.
  * @input_string: A string to write to stdin of the spawned program or %NULL.
  * @run_as_uid: The #uid_t to run the program as.
  * @run_as_euid: The effective #uid_t to run the program as.
  * @cancellable: A #GCancellable or %NULL.
  *
- * Creates a new #UlSpawnedJob instance.
+ * Creates a new #StorageSpawnedJob instance.
  *
  * The job is started immediately - connect to the
- * #UlSpawnedJob::spawned-job-completed or #UlJob::completed
+ * #StorageSpawnedJob::spawned-job-completed or #StorageJob::completed
  * signals to get notified when the job is done.
  *
- * Returns: A new #UlSpawnedJob. Free with g_object_unref().
+ * Returns: A new #StorageSpawnedJob. Free with g_object_unref().
  */
-UlSpawnedJob *
-ul_spawned_job_new (const gchar **argv,
-                    const gchar *input_string,
-                    uid_t run_as_uid,
-                    uid_t run_as_euid,
-                    GCancellable *cancellable)
+StorageSpawnedJob *
+storage_spawned_job_new (const gchar **argv,
+                         const gchar *input_string,
+                         uid_t run_as_uid,
+                         uid_t run_as_euid,
+                         GCancellable *cancellable)
 {
   g_return_val_if_fail (argv != NULL, NULL);
   g_return_val_if_fail (cancellable == NULL || G_IS_CANCELLABLE (cancellable), NULL);
 
-  return g_object_new (UL_TYPE_SPAWNED_JOB,
+  return g_object_new (STORAGE_TYPE_SPAWNED_JOB,
                        "argv", argv,
                        "input-string", input_string,
                        "run-as-uid", run_as_uid,
@@ -678,16 +678,16 @@ ul_spawned_job_new (const gchar **argv,
 
 /**
  * udisks_spawned_job_get_argv:
- * @job: A #UlSpawnedJob.
+ * @job: A #StorageSpawnedJob.
  *
  * Gets the command line that @job was constructed with.
  *
  * Returns: A string owned by @job. Do not free.
  */
 const gchar **
-ul_spawned_job_get_argv (UlSpawnedJob *self)
+storage_spawned_job_get_argv (StorageSpawnedJob *self)
 {
-  g_return_val_if_fail (UL_IS_SPAWNED_JOB (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_SPAWNED_JOB (self), NULL);
   return (const gchar **)self->argv;
 }
 
@@ -696,18 +696,18 @@ ul_spawned_job_get_argv (UlSpawnedJob *self)
 static void
 job_iface_init (UDisksJobIface *iface)
 {
-  /* For Cancel(), just use the implementation from our super class (UlJob) */
+  /* For Cancel(), just use the implementation from our super class (StorageJob) */
   /* iface->handle_cancel   = handle_cancel; */
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
 
 static gboolean
-udisks_spawned_job_spawned_job_completed_default (UlSpawnedJob *self,
-                                                  GError *error,
-                                                  gint status,
-                                                  GString *standard_output,
-                                                  GString *standard_error)
+storage_spawned_job_completed_default (StorageSpawnedJob *self,
+                                       GError *error,
+                                       gint status,
+                                       GString *standard_output,
+                                       GString *standard_error)
 {
   g_debug ("spawned job completed: "
            " status=%d (WIFEXITED=%d WEXITSTATUS=%d) "
@@ -730,7 +730,7 @@ udisks_spawned_job_spawned_job_completed_default (UlSpawnedJob *self,
                                  message);
       g_free (message);
     }
-  else if (ul_util_check_status_and_output (self->argv[0],
+  else if (storage_util_check_status_and_output (self->argv[0],
                                             status,
                                             standard_error->str,
                                             standard_output->str,
@@ -758,7 +758,7 @@ child_watch_from_release_cb (GPid pid,
 
 /* called when we're done running the command line */
 static void
-udisks_spawned_job_release_resources (UlSpawnedJob *self)
+storage_spawned_job_release_resources (StorageSpawnedJob *self)
 {
   /* Nuke the child, if necessary */
   if (self->child_watch_source != NULL)
@@ -858,7 +858,7 @@ udisks_spawned_job_release_resources (UlSpawnedJob *self)
 
   if (self->cancellable_handler_id > 0)
     {
-      g_cancellable_disconnect (ul_job_get_cancellable (UL_JOB (self)),
+      g_cancellable_disconnect (storage_job_get_cancellable (STORAGE_JOB (self)),
                                 self->cancellable_handler_id);
       self->cancellable_handler_id = 0;
     }

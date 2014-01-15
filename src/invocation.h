@@ -13,25 +13,25 @@
 
 #include "config.h"
 
-#ifndef __INVOCATION_H__
-#define __INVOCATION_H__
+#ifndef __STORAGE_INVOCATION_H__
+#define __STORAGE_INVOCATION_H__
 
 #include <gio/gio.h>
 
 G_BEGIN_DECLS
 
-typedef void (* UlClientFunc) (const gchar *bus_name,
-                               gpointer user_data);
+typedef void (* StorageClientFunc) (const gchar *bus_name,
+                                    gpointer user_data);
 
-void                 ul_invocation_initialize             (GDBusConnection *connection,
-                                                           UlClientFunc client_appeared,
-                                                           UlClientFunc client_disappeared,
+void                 storage_invocation_initialize        (GDBusConnection *connection,
+                                                           StorageClientFunc client_appeared,
+                                                           StorageClientFunc client_disappeared,
                                                            gpointer user_data);
 
-uid_t                ul_invocation_get_caller_uid         (GDBusMethodInvocation *invocation);
+uid_t                storage_invocation_get_caller_uid    (GDBusMethodInvocation *invocation);
 
-void                 ul_invocation_cleanup                (void);
+void                 storage_invocation_cleanup           (void);
 
 G_END_DECLS
 
-#endif /* __UL_INVOCATION_H__ */
+#endif /* __STORAGE_INVOCATION_H__ */

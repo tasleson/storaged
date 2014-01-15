@@ -172,7 +172,7 @@ test_lvcreate_change_remove (Test *test,
                           "--size", "20m", "--activate", "n", "--zero", "n", NULL);
 
   /*
-   * TODO: We get the following here. Does LVM not support enumerating (by udisks-lvm)
+   * TODO: We get the following here. Does LVM not support enumerating (by storaged)
    * simultaneous to creation of a new logical volume?
    *
    * lvcreate test-udisk-lvm -n two -L 20m
@@ -254,11 +254,11 @@ main (int argc,
 
   if (testing_target_init ())
     {
-      g_test_add ("/udisks/lvm/vgcreate-remove", Test, NULL,
+      g_test_add ("/storaged/lvm/vgcreate-remove", Test, NULL,
                   setup_target, test_vgcreate_remove, teardown_target);
-      g_test_add ("/udisks/lvm/lvcreate-change-remove", Test, NULL,
+      g_test_add ("/storaged/lvm/lvcreate-change-remove", Test, NULL,
                   setup_vgcreate, test_lvcreate_change_remove, teardown_vgremove);
-      g_test_add ("/udisks/lvm/vgreduce", Test, NULL,
+      g_test_add ("/storaged/lvm/vgreduce", Test, NULL,
                   setup_vgcreate, test_vgreduce, teardown_vgremove);
     }
 

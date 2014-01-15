@@ -48,7 +48,7 @@ on_bus_acquired (GObject *source,
                  GAsyncResult *res,
                  gpointer user_data)
 {
-  UlDaemon **daemon = user_data;
+  StorageDaemon **daemon = user_data;
   GDBusConnection *connection;
   GError *error = NULL;
 
@@ -61,7 +61,7 @@ on_bus_acquired (GObject *source,
     }
   else
     {
-      *daemon = g_object_new (UL_TYPE_DAEMON,
+      *daemon = g_object_new (STORAGE_TYPE_DAEMON,
                               "connection", connection,
                               "resource-dir", opt_resources,
                               "replace-name", opt_replace,
@@ -221,7 +221,7 @@ main (int argc,
   GError *error;
   GOptionContext *opt_context;
   GIOChannel *channel;
-  UlDaemon *daemon = NULL;
+  StorageDaemon *daemon = NULL;
   gint ret;
 
   ret = 1;
@@ -242,7 +242,7 @@ main (int argc,
       goto out;
     }
 
-  opt_context = g_option_context_new ("udisks-extra storage daemon");
+  opt_context = g_option_context_new ("storaged -- storage daemon");
   g_option_context_add_main_entries (opt_context, opt_entries, NULL);
   error = NULL;
   if (!g_option_context_parse (opt_context, &argc, &argv, &error))
@@ -271,7 +271,7 @@ main (int argc,
   if (g_getenv ("PATH") == NULL)
     g_setenv ("PATH", "/usr/bin:/bin:/usr/sbin:/sbin", TRUE);
 
-  g_info ("udisks-lvm version %s starting", PACKAGE_VERSION);
+  g_info ("storaged version %s starting", PACKAGE_VERSION);
 
   loop = g_main_loop_new (NULL, FALSE);
 
@@ -294,7 +294,7 @@ main (int argc,
   if (opt_context != NULL)
     g_option_context_free (opt_context);
 
-  g_info ("udisks-lvm version %s exiting", PACKAGE_VERSION);
+  g_info ("storaged version %s exiting", PACKAGE_VERSION);
 
   return ret;
 }

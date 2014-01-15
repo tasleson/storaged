@@ -18,32 +18,32 @@
  *
  */
 
-#ifndef __UDISKS_DAEMON_UTIL_H__
-#define __UDISKS_DAEMON_UTIL_H__
+#ifndef __STORAGE_UTIL_H__
+#define __STORAGE_UTIL_H__
 
 #include <glib.h>
 
 G_BEGIN_DECLS
 
-gchar *             ul_util_build_object_path       (const gchar *base,
-                                                     const gchar *part,
-                                                     ...) G_GNUC_NULL_TERMINATED;
+gchar *             storage_util_build_object_path       (const gchar *base,
+                                                          const gchar *part,
+                                                          ...) G_GNUC_NULL_TERMINATED;
 
-gboolean            ul_util_lvm_name_is_reserved    (const gchar *name);
+gboolean            storage_util_lvm_name_is_reserved    (const gchar *name);
 
-gchar *             ul_util_encode_lvm_name         (const gchar *name,
-                                                     gboolean for_logical_volume);
+gchar *             storage_util_encode_lvm_name         (const gchar *name,
+                                                          gboolean for_logical_volume);
 
-gchar *             ul_util_decode_lvm_name         (const gchar *encoded);
+gchar *             storage_util_decode_lvm_name         (const gchar *encoded);
 
-gboolean            ul_util_wipe_block              (const gchar *device_file,
-                                                     GError **error);
+gboolean            storage_util_wipe_block              (const gchar *device_file,
+                                                          GError **error);
 
-gboolean            ul_util_check_status_and_output (const gchar *cmd,
-                                                     gint exit_status,
-                                                     const gchar *standard_output,
-                                                     const gchar *standard_error,
-                                                     GError **error);
+gboolean            storage_util_check_status_and_output (const gchar *cmd,
+                                                          gint exit_status,
+                                                          const gchar *standard_output,
+                                                          const gchar *standard_error,
+                                                          GError **error);
 
 /*
  * GLib doesn't have g_info() yet:

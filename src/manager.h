@@ -18,30 +18,30 @@
  *
  */
 
-#ifndef __UL_MANAGER_H__
-#define __UL_MANAGER_H__
+#ifndef __STORAGE_MANAGER_H__
+#define __STORAGE_MANAGER_H__
 
 #include "daemon.h"
 #include "volumegroup.h"
 
 G_BEGIN_DECLS
 
-#define UL_TYPE_MANAGER         (ul_manager_get_type ())
-#define UL_MANAGER(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), UL_TYPE_MANAGER, UlManager))
-#define UL_IS_MANAGER(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), UL_TYPE_MANAGER))
+#define STORAGE_TYPE_MANAGER         (storage_manager_get_type ())
+#define STORAGE_MANAGER(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), STORAGE_TYPE_MANAGER, StorageManager))
+#define STORAGE_IS_MANAGER(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), STORAGE_TYPE_MANAGER))
 
-GType                  ul_manager_get_type                 (void) G_GNUC_CONST;
+GType                  storage_manager_get_type            (void) G_GNUC_CONST;
 
-UlManager *            ul_manager_new                      (void);
+StorageManager *       storage_manager_new                 (void);
 
-UlVolumeGroup *        ul_manager_find_volume_group        (UlManager *self,
+StorageVolumeGroup *   storage_manager_find_volume_group   (StorageManager *self,
                                                             const gchar *name);
 
-GList *                ul_manager_get_blocks               (UlManager *self);
+GList *                storage_manager_get_blocks          (StorageManager *self);
 
-UlBlock *              ul_manager_find_block               (UlManager *self,
+StorageBlock *         storage_manager_find_block          (StorageManager *self,
                                                             const gchar *udisks_path);
 
 G_END_DECLS
 
-#endif /* __UL_MANAGER_H__ */
+#endif /* __STORAGE_MANAGER_H__ */

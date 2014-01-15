@@ -329,16 +329,16 @@ main (int argc,
 
   if (testing_target_init ())
     {
-      g_test_add ("/udisks/lvm/volume-group/create", Test, NULL,
+      g_test_add ("/storaged/lvm/volume-group/create", Test, NULL,
                   setup_target, test_volume_group_create, teardown_target);
-      g_test_add ("/udisks/lvm/volume-group/delete", Test, NULL,
+      g_test_add ("/storaged/lvm/volume-group/delete", Test, NULL,
                   setup_vgcreate, test_volume_group_delete, teardown_target);
 
-      g_test_add ("/udisks/lvm/logical-volume/create", Test, "volone",
+      g_test_add ("/storaged/lvm/logical-volume/create", Test, "volone",
                   setup_vgcreate, test_logical_volume_create, teardown_lvremove_vgremove);
-      g_test_add ("/udisks/lvm/logical-volume/delete", Test, "volone",
+      g_test_add ("/storaged/lvm/logical-volume/delete", Test, "volone",
                   setup_vgcreate_lvcreate, test_logical_volume_delete, teardown_vgremove);
-      g_test_add ("/udisks/lvm/logical-volume/activate", Test, "volone",
+      g_test_add ("/storaged/lvm/logical-volume/activate", Test, "volone",
                   setup_vgcreate_lvcreate, test_logical_volume_activate, teardown_lvremove_vgremove);
     }
 

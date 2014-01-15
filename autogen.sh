@@ -1,5 +1,5 @@
 #!/bin/sh
-# This file is part of udisks-lvm.
+# This file is part of storaged.
 #
 # Copyright (C) 2013 Red Hat, Inc.
 #
@@ -23,7 +23,7 @@ set -eux
 srcdir=`dirname $0`
 test -z "$srcdir" && srcdir=.
 
-PKG_NAME="udisks-lvm"
+PKG_NAME="storaged"
 
 (test -f $srcdir/src/main.c) || {
     echo -n "**Error**: Directory "\`$srcdir\'" does not look like the"

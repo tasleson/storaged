@@ -35,8 +35,8 @@ struct {
   GTypeClass *dbus_interface_skeleton_class;
   GObject * (* overridden_constructor) (GType, guint, GObjectConstructParam *);
 
-  UlClientFunc client_appeared;
-  UlClientFunc client_disappeared;
+  StorageClientFunc client_appeared;
+  StorageClientFunc client_disappeared;
   gpointer client_user_data;
 
   GMutex mutex;
@@ -546,10 +546,10 @@ hook_dbus_interface_skeleton_constructor (GType type,
 }
 
 void
-ul_invocation_initialize (GDBusConnection *connection,
-                          UlClientFunc client_appeared,
-                          UlClientFunc client_disappeared,
-                          gpointer user_data)
+storage_invocation_initialize (GDBusConnection *connection,
+                               StorageClientFunc client_appeared,
+                               StorageClientFunc client_disappeared,
+                               gpointer user_data)
 {
   GObjectClass *object_class;
   GError *error = NULL;
@@ -578,7 +578,7 @@ ul_invocation_initialize (GDBusConnection *connection,
 }
 
 void
-ul_invocation_cleanup (void)
+storage_invocation_cleanup (void)
 {
   inv.client_appeared = NULL;
   inv.client_disappeared = NULL;
@@ -590,7 +590,7 @@ ul_invocation_cleanup (void)
 }
 
 uid_t
-ul_invocation_get_caller_uid (GDBusMethodInvocation *invocation)
+storage_invocation_get_caller_uid (GDBusMethodInvocation *invocation)
 {
   InvocationClient *client;
   GError *error = NULL;

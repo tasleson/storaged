@@ -42,31 +42,31 @@
 #include <mntent.h>
 
 /**
- * SECTION:udiskslinuxvolume_group
- * @title: UlVolumeGroup
+ * SECTION:storagevolume_group
+ * @title: StorageVolumeGroup
  * @short_description: Linux implementation of #LvmVolumeGroup
  *
  * This type provides an implementation of the #LvmVolumeGroup interface
  * on Linux.
  */
 
-typedef struct _UlVolumeGroupClass   UlVolumeGroupClass;
+typedef struct _StorageVolumeGroupClass   StorageVolumeGroupClass;
 
 /**
- * UlVolumeGroup:
+ * StorageVolumeGroup:
  *
- * The #UlVolumeGroup structure contains only private data and should
+ * The #StorageVolumeGroup structure contains only private data and should
  * only be accessed using the provided API.
  */
-struct _UlVolumeGroup
+struct _StorageVolumeGroup
 {
   LvmVolumeGroupSkeleton parent_instance;
 
   gchar *name;
   gboolean need_publish;
 
-  GVariant *info;                 // output of udisks-lvm-helper
-  GHashTable *logical_volumes;    // lv name -> UlLogicalVolume
+  GVariant *info;                 // output of storaged-lvm-helper
+  GHashTable *logical_volumes;    // lv name -> StorageLogicalVolume
   GHashTable *physical_volumes;   // device path -> GVariant *, output of udisks-lvm-helper
 
   GPid poll_pid;
@@ -74,7 +74,7 @@ struct _UlVolumeGroup
   gboolean poll_requested;
 };
 
-struct _UlVolumeGroupClass
+struct _StorageVolumeGroupClass
 {
   LvmVolumeGroupSkeletonClass parent_class;
 };
@@ -87,14 +87,14 @@ enum
 
 static void volume_group_iface_init (LvmVolumeGroupIface *iface);
 
-G_DEFINE_TYPE_WITH_CODE (UlVolumeGroup, ul_volume_group, LVM_TYPE_VOLUME_GROUP_SKELETON,
+G_DEFINE_TYPE_WITH_CODE (StorageVolumeGroup, storage_volume_group, LVM_TYPE_VOLUME_GROUP_SKELETON,
                          G_IMPLEMENT_INTERFACE (LVM_TYPE_VOLUME_GROUP, volume_group_iface_init)
 );
 
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
-ul_volume_group_init (UlVolumeGroup *self)
+storage_volume_group_init (StorageVolumeGroup *self)
 {
   self->logical_volumes = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
                                                  (GDestroyNotify) g_object_unref);
@@ -103,12 +103,12 @@ ul_volume_group_init (UlVolumeGroup *self)
   self->need_publish = TRUE;
 }
 
-static void update_all_blocks (UlVolumeGroup *self);
+static void update_all_blocks (StorageVolumeGroup *self);
 
 static void
-ul_volume_group_dispose (GObject *obj)
+storage_volume_group_dispose (GObject *obj)
 {
-  UlVolumeGroup *self = UL_VOLUME_GROUP (obj);
+  StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (obj);
   GHashTableIter iter;
   const gchar *path;
   gpointer value;
@@ -130,36 +130,36 @@ ul_volume_group_dispose (GObject *obj)
 
   update_all_blocks (self);
 
-  path = ul_volume_group_get_object_path (self);
+  path = storage_volume_group_get_object_path (self);
   if (path != NULL)
-    ul_daemon_unpublish (ul_daemon_get (), path, self);
+    storage_daemon_unpublish (storage_daemon_get (), path, self);
 
-  G_OBJECT_CLASS (ul_volume_group_parent_class)->dispose (obj);
+  G_OBJECT_CLASS (storage_volume_group_parent_class)->dispose (obj);
 }
 
 static void
-ul_volume_group_finalize (GObject *obj)
+storage_volume_group_finalize (GObject *obj)
 {
-  UlVolumeGroup *self = UL_VOLUME_GROUP (obj);
+  StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (obj);
 
   g_hash_table_unref (self->logical_volumes);
   g_free (self->name);
 
-  G_OBJECT_CLASS (ul_volume_group_parent_class)->finalize (obj);
+  G_OBJECT_CLASS (storage_volume_group_parent_class)->finalize (obj);
 }
 
 static void
-ul_volume_group_get_property (GObject *obj,
+storage_volume_group_get_property (GObject *obj,
                               guint prop_id,
                               GValue *value,
                               GParamSpec *pspec)
 {
-  UlVolumeGroup *self = UL_VOLUME_GROUP (obj);
+  StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (obj);
 
   switch (prop_id)
     {
     case PROP_NAME:
-      g_value_set_string (value, ul_volume_group_get_name (self));
+      g_value_set_string (value, storage_volume_group_get_name (self));
       break;
 
     default:
@@ -169,12 +169,12 @@ ul_volume_group_get_property (GObject *obj,
 }
 
 static void
-ul_volume_group_set_property (GObject *obj,
+storage_volume_group_set_property (GObject *obj,
                               guint prop_id,
                               const GValue *value,
                               GParamSpec *pspec)
 {
-  UlVolumeGroup *self = UL_VOLUME_GROUP (obj);
+  StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (obj);
 
   switch (prop_id)
     {
@@ -190,18 +190,18 @@ ul_volume_group_set_property (GObject *obj,
 }
 
 static void
-ul_volume_group_class_init (UlVolumeGroupClass *klass)
+storage_volume_group_class_init (StorageVolumeGroupClass *klass)
 {
   GObjectClass *gobject_class;
 
   gobject_class = G_OBJECT_CLASS (klass);
-  gobject_class->dispose = ul_volume_group_dispose;
-  gobject_class->finalize = ul_volume_group_finalize;
-  gobject_class->set_property = ul_volume_group_set_property;
-  gobject_class->get_property = ul_volume_group_get_property;
+  gobject_class->dispose = storage_volume_group_dispose;
+  gobject_class->finalize = storage_volume_group_finalize;
+  gobject_class->set_property = storage_volume_group_set_property;
+  gobject_class->get_property = storage_volume_group_get_property;
 
   /**
-   * UlVolumeGroupObject:name:
+   * StorageVolumeGroupObject:name:
    *
    * The name of the volume group.
    */
@@ -217,29 +217,29 @@ ul_volume_group_class_init (UlVolumeGroupClass *klass)
 }
 
 /**
- * ul_volume_group_new:
+ * storage_volume_group_new:
  *
- * Creates a new #UlVolumeGroup instance.
+ * Creates a new #StorageVolumeGroup instance.
  *
- * Returns: A new #UlVolumeGroup. Free with g_object_unref().
+ * Returns: A new #StorageVolumeGroup. Free with g_object_unref().
  */
-UlVolumeGroup *
-ul_volume_group_new (const gchar *name)
+StorageVolumeGroup *
+storage_volume_group_new (const gchar *name)
 {
-  return g_object_new (UL_TYPE_VOLUME_GROUP,
+  return g_object_new (STORAGE_TYPE_VOLUME_GROUP,
                        "name", name,
                        NULL);
 }
 
 /**
- * ul_volume_group_update:
- * @self: A #UlVolumeGroup.
- * @object: The enclosing #UlVolumeGroupObject instance.
+ * storage_volume_group_update:
+ * @self: A #StorageVolumeGroup.
+ * @object: The enclosing #StorageVolumeGroupObject instance.
  *
  * Updates the interface.
  */
 static void
-volume_group_update_props (UlVolumeGroup *self,
+volume_group_update_props (StorageVolumeGroup *self,
                            GVariant *info,
                            gboolean *needs_polling_ret)
 {
@@ -249,7 +249,7 @@ volume_group_update_props (UlVolumeGroup *self,
 
   if (g_variant_lookup (info, "name", "&s", &str))
     {
-      gchar *decoded = ul_util_decode_lvm_name (str);
+      gchar *decoded = storage_util_decode_lvm_name (str);
       lvm_volume_group_set_display_name (iface, decoded);
       g_free (decoded);
     }
@@ -276,7 +276,7 @@ lv_is_pvmove_volume (const gchar *name)
 static gboolean
 lv_is_visible (const gchar *name)
 {
-  return name && !ul_util_lvm_name_is_reserved (name);
+  return name && !storage_util_lvm_name_is_reserved (name);
 }
 
 static void
@@ -284,13 +284,13 @@ update_progress_for_device (const gchar *operation,
                             const gchar *dev,
                             double progress)
 {
-  UlDaemon *daemon;
-  UlManager *manager;
+  StorageDaemon *daemon;
+  StorageManager *manager;
   GList *jobs, *l;
 
-  daemon = ul_daemon_get ();
-  manager = ul_daemon_get_manager (daemon);
-  jobs = ul_daemon_get_jobs (daemon);
+  daemon = storage_daemon_get ();
+  manager = storage_daemon_get_manager (daemon);
+  jobs = storage_daemon_get_jobs (daemon);
 
   for (l = jobs; l; l = g_list_next (l))
     {
@@ -304,13 +304,13 @@ update_progress_for_device (const gchar *operation,
       job_objects = udisks_job_get_objects (job);
       for (i = 0; job_objects[i]; i++)
         {
-          UlBlock *block;
+          StorageBlock *block;
           gboolean found = FALSE;
 
-          block = ul_manager_find_block (manager, job_objects[i]);
+          block = storage_manager_find_block (manager, job_objects[i]);
           if (block)
             {
-              if (g_strcmp0 (ul_block_get_device (block), dev) == 0)
+              if (g_strcmp0 (storage_block_get_device (block), dev) == 0)
                 {
                   found = TRUE;
                 }
@@ -319,7 +319,7 @@ update_progress_for_device (const gchar *operation,
                   const gchar **symlinks;
                   int j;
 
-                  symlinks = ul_block_get_symlinks (block);
+                  symlinks = storage_block_get_symlinks (block);
                   for (j = 0; symlinks[j]; j++)
                     {
                       if (g_strcmp0 (symlinks[j], dev) == 0)
@@ -363,36 +363,36 @@ update_operations (const gchar *lv_name,
 
 
 void
-ul_volume_group_update_block (UlVolumeGroup *self,
-                              UlBlock *block)
+storage_volume_group_update_block (StorageVolumeGroup *self,
+                                   StorageBlock *block)
 {
 
   GUdevDevice *device;
-  UlLogicalVolume *volume;
+  StorageLogicalVolume *volume;
   const gchar *block_vg_name;
   const gchar *block_lv_name;
   GVariant *pv_info;
 
-  device = ul_block_get_udev (block);
+  device = storage_block_get_udev (block);
   if (device)
     {
       block_vg_name = g_udev_device_get_property (device, "DM_VG_NAME");
       block_lv_name = g_udev_device_get_property (device, "DM_LV_NAME");
 
-      if (g_strcmp0 (block_vg_name, ul_volume_group_get_name (self)) == 0)
+      if (g_strcmp0 (block_vg_name, storage_volume_group_get_name (self)) == 0)
         {
           volume = g_hash_table_lookup (self->logical_volumes, block_lv_name);
-          ul_block_update_lv (block, volume);
+          storage_block_update_lv (block, volume);
         }
       g_object_unref (device);
     }
 
-  pv_info = g_hash_table_lookup (self->physical_volumes, ul_block_get_device (block));
+  pv_info = g_hash_table_lookup (self->physical_volumes, storage_block_get_device (block));
   if (!pv_info)
     {
       const gchar *const *symlinks;
       int i;
-      symlinks = ul_block_get_symlinks (block);
+      symlinks = storage_block_get_symlinks (block);
       for (i = 0; symlinks[i]; i++)
         {
           pv_info = g_hash_table_lookup (self->physical_volumes, symlinks[i]);
@@ -403,28 +403,28 @@ ul_volume_group_update_block (UlVolumeGroup *self,
 
   if (pv_info)
     {
-      ul_block_update_pv (block, self, pv_info);
+      storage_block_update_pv (block, self, pv_info);
     }
   else
     {
-      LvmPhysicalVolumeBlock *pv = ul_block_get_physical_volume_block (block);
+      LvmPhysicalVolumeBlock *pv = storage_block_get_physical_volume_block (block);
       if (pv && g_strcmp0 (lvm_physical_volume_block_get_volume_group (pv),
-                           ul_volume_group_get_object_path (self)) == 0)
-        ul_block_update_pv (block, NULL, NULL);
+                           storage_volume_group_get_object_path (self)) == 0)
+        storage_block_update_pv (block, NULL, NULL);
     }
 }
 
 static void
-update_all_blocks (UlVolumeGroup *self)
+update_all_blocks (StorageVolumeGroup *self)
 {
   GList *blocks, *l;
-  UlDaemon *daemon;
+  StorageDaemon *daemon;
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
-  blocks = ul_manager_get_blocks (ul_daemon_get_manager (daemon));
+  blocks = storage_manager_get_blocks (storage_daemon_get_manager (daemon));
   for (l = blocks; l != NULL; l = g_list_next (l))
-    ul_volume_group_update_block (self, l->data);
+    storage_volume_group_update_block (self, l->data);
   g_list_free_full (blocks, g_object_unref);
 }
 
@@ -434,16 +434,16 @@ update_with_variant (GPid pid,
                      GError *error,
                      gpointer user_data)
 {
-  UlVolumeGroup *self = user_data;
+  StorageVolumeGroup *self = user_data;
   GVariantIter *iter;
   GHashTableIter volume_iter;
   gpointer key, value;
   GHashTable *new_lvs;
   gboolean needs_polling = FALSE;
-  UlDaemon *daemon;
+  StorageDaemon *daemon;
   gchar *path;
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
   if (!error)
       volume_group_update_props (self, info, &needs_polling);
@@ -452,16 +452,16 @@ update_with_variant (GPid pid,
   if (self->need_publish)
     {
       self->need_publish = FALSE;
-      path = ul_util_build_object_path ("/org/freedesktop/UDisks2/lvm",
-                                        ul_volume_group_get_name (self), NULL);
-      ul_daemon_publish (daemon, path, FALSE, self);
+      path = storage_util_build_object_path ("/org/freedesktop/UDisks2/lvm",
+                                        storage_volume_group_get_name (self), NULL);
+      storage_daemon_publish (daemon, path, FALSE, self);
       g_free (path);
     }
 
   if (error)
     {
       g_message ("Failed to update LVM volume group %s: %s",
-                 ul_volume_group_get_name (self), error->message);
+                 storage_volume_group_get_name (self), error->message);
       g_object_unref (self);
       return;
     }
@@ -485,7 +485,7 @@ update_with_variant (GPid pid,
       while (g_variant_iter_loop (iter, "@a{sv}", &lv_info))
         {
           const gchar *name;
-          UlLogicalVolume *volume;
+          StorageLogicalVolume *volume;
 
           g_variant_lookup (lv_info, "name", "&s", &name);
 
@@ -500,13 +500,13 @@ update_with_variant (GPid pid,
           volume = g_hash_table_lookup (self->logical_volumes, name);
           if (volume == NULL)
             {
-              volume = ul_logical_volume_new (self, name);
-              ul_logical_volume_update (volume, self, lv_info, &needs_polling);
+              volume = storage_logical_volume_new (self, name);
+              storage_logical_volume_update (volume, self, lv_info, &needs_polling);
 
               g_hash_table_insert (self->logical_volumes, g_strdup (name), g_object_ref (volume));
             }
           else
-            ul_logical_volume_update (volume, self, lv_info, &needs_polling);
+            storage_logical_volume_update (volume, self, lv_info, &needs_polling);
 
           g_hash_table_insert (new_lvs, (gchar *)name, volume);
         }
@@ -517,7 +517,7 @@ update_with_variant (GPid pid,
   while (g_hash_table_iter_next (&volume_iter, &key, &value))
     {
       const gchar *name = key;
-      UlLogicalVolume *volume = value;
+      StorageLogicalVolume *volume = value;
 
       if (!g_hash_table_contains (new_lvs, name))
         {
@@ -554,15 +554,15 @@ update_with_variant (GPid pid,
 }
 
 void
-ul_volume_group_update (UlVolumeGroup *self)
+storage_volume_group_update (StorageVolumeGroup *self)
 {
   const gchar *args[] = {
-      "udisks-lvm-helper", "-b",
+      "storaged-lvm-helper", "-b",
       "show", self->name, NULL
   };
 
-  ul_daemon_spawn_for_variant (ul_daemon_get (), args, G_VARIANT_TYPE ("a{sv}"),
-                               update_with_variant, g_object_ref (self));
+  storage_daemon_spawn_for_variant (storage_daemon_get (), args, G_VARIANT_TYPE ("a{sv}"),
+                                    update_with_variant, g_object_ref (self));
 }
 
 static void
@@ -571,7 +571,7 @@ poll_with_variant (GPid pid,
                    GError *error,
                    gpointer user_data)
 {
-  UlVolumeGroup *self = user_data;
+  StorageVolumeGroup *self = user_data;
   GVariantIter *iter;
   gboolean needs_polling;
 
@@ -586,7 +586,7 @@ poll_with_variant (GPid pid,
   if (error)
     {
       g_message ("Failed to poll LVM volume group %s: %s",
-                 ul_volume_group_get_name (self), error->message);
+                 storage_volume_group_get_name (self), error->message);
       g_object_unref (self);
       return;
     }
@@ -599,13 +599,13 @@ poll_with_variant (GPid pid,
       while (g_variant_iter_loop (iter, "@a{sv}", &lv_info))
         {
           const gchar *name;
-          UlLogicalVolume *volume;
+          StorageLogicalVolume *volume;
 
           g_variant_lookup (lv_info, "name", "&s", &name);
           update_operations (name, lv_info, &needs_polling);
           volume = g_hash_table_lookup (self->logical_volumes, name);
           if (volume)
-            ul_logical_volume_update (volume, self, lv_info, &needs_polling);
+            storage_logical_volume_update (volume, self, lv_info, &needs_polling);
         }
       g_variant_iter_free (iter);
     }
@@ -613,12 +613,12 @@ poll_with_variant (GPid pid,
   g_object_unref (self);
 }
 
-static void   poll_now  (UlVolumeGroup *self);
+static void   poll_now  (StorageVolumeGroup *self);
 
 static gboolean
 poll_in_main (gpointer user_data)
 {
-  UlVolumeGroup *self = user_data;
+  StorageVolumeGroup *self = user_data;
 
   if (self->poll_timeout_id)
     self->poll_requested = TRUE;
@@ -632,7 +632,7 @@ poll_in_main (gpointer user_data)
 static gboolean
 poll_timeout (gpointer user_data)
 {
-  UlVolumeGroup *self = user_data;
+  StorageVolumeGroup *self = user_data;
 
   self->poll_timeout_id = 0;
   if (self->poll_requested)
@@ -646,10 +646,10 @@ poll_timeout (gpointer user_data)
 }
 
 static void
-poll_now (UlVolumeGroup *self)
+poll_now (StorageVolumeGroup *self)
 {
   const gchar *args[] = {
-      "udisks-lvm-helper",
+      "storaged-lvm-helper",
       "-b", "show", self->name, NULL
   };
 
@@ -658,8 +658,8 @@ poll_now (UlVolumeGroup *self)
   if (self->poll_pid)
     kill (self->poll_pid, SIGINT);
 
-  self->poll_pid = ul_daemon_spawn_for_variant (ul_daemon_get (), args, G_VARIANT_TYPE ("a{sv}"),
-                                                poll_with_variant, g_object_ref (self));
+  self->poll_pid = storage_daemon_spawn_for_variant (storage_daemon_get (), args, G_VARIANT_TYPE ("a{sv}"),
+                                                     poll_with_variant, g_object_ref (self));
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
@@ -668,9 +668,9 @@ static gboolean
 handle_poll (LvmVolumeGroup *group,
              GDBusMethodInvocation *invocation)
 {
-  UlVolumeGroup *self = UL_VOLUME_GROUP (group);
+  StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (group);
 
-  ul_volume_group_poll (self);
+  storage_volume_group_poll (self);
   lvm_volume_group_complete_poll (group, invocation);
 
   return TRUE;
@@ -731,9 +731,9 @@ volume_group_delete_job_thread (GCancellable *cancellable,
 
   if (ret)
     {
-      ret = ul_util_check_status_and_output ("vgremove",
-                                             exit_status, standard_output,
-                                             standard_error, error);
+      ret = storage_util_check_status_and_output ("vgremove",
+                                                  exit_status, standard_output,
+                                                  standard_error, error);
     }
 
   g_free (standard_output);
@@ -743,7 +743,7 @@ volume_group_delete_job_thread (GCancellable *cancellable,
     {
       for (i = 0; data->devices && data->devices[i] != NULL; i++)
         {
-          if (!ul_util_wipe_block (data->devices[i], error))
+          if (!storage_util_wipe_block (data->devices[i], error))
             {
               ret = FALSE;
               break;
@@ -777,45 +777,45 @@ handle_delete (LvmVolumeGroup *group,
                GDBusMethodInvocation *invocation,
                GVariant *arg_options)
 {
-  UlVolumeGroup *self = UL_VOLUME_GROUP (group);
+  StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (group);
   VolumeGroupDeleteJobData *data;
-  UlDaemon *daemon;
+  StorageDaemon *daemon;
   gboolean opt_wipe = FALSE;
-  UlJob *job;
+  StorageJob *job;
   GList *l;
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
   data = g_new0 (VolumeGroupDeleteJobData, 1);
-  data->vgname = g_strdup (ul_volume_group_get_name (self));
+  data->vgname = g_strdup (storage_volume_group_get_name (self));
 
   /* Find physical volumes to wipe. */
   g_variant_lookup (arg_options, "wipe", "b", &opt_wipe);
   if (opt_wipe)
     {
       GPtrArray *devices = g_ptr_array_new ();
-      GList *blocks = ul_manager_get_blocks (ul_daemon_get_manager (daemon));
+      GList *blocks = storage_manager_get_blocks (storage_daemon_get_manager (daemon));
       for (l = blocks; l; l = l->next)
         {
           LvmPhysicalVolumeBlock *physical_volume;
-          physical_volume = ul_block_get_physical_volume_block (l->data);
+          physical_volume = storage_block_get_physical_volume_block (l->data);
           if (physical_volume
               && g_strcmp0 (lvm_physical_volume_block_get_volume_group (physical_volume),
-                            ul_volume_group_get_object_path (self)) == 0)
-            g_ptr_array_add (devices, g_strdup (ul_block_get_device (l->data)));
+                            storage_volume_group_get_object_path (self)) == 0)
+            g_ptr_array_add (devices, g_strdup (storage_block_get_device (l->data)));
         }
       g_list_free_full (blocks, g_object_unref);
       g_ptr_array_add (devices, NULL);
       data->devices = (gchar **)g_ptr_array_free (devices, FALSE);
     }
 
-  job = ul_daemon_launch_threaded_job (daemon, self,
-                                      "lvm-vg-delete",
-                                      ul_invocation_get_caller_uid (invocation),
-                                      volume_group_delete_job_thread,
-                                      data,
-                                      volume_group_delete_job_free,
-                                      NULL);
+  job = storage_daemon_launch_threaded_job (daemon, self,
+                                            "lvm-vg-delete",
+                                            storage_invocation_get_caller_uid (invocation),
+                                            volume_group_delete_job_thread,
+                                            data,
+                                            volume_group_delete_job_free,
+                                            NULL);
 
   g_signal_connect_data (job, "completed", G_CALLBACK (on_delete_complete),
                          g_object_ref (invocation), (GClosureNotify)g_object_unref, 0);
@@ -826,16 +826,16 @@ handle_delete (LvmVolumeGroup *group,
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
-on_rename_volume_group (UlDaemon *daemon,
-                        UlVolumeGroup *group,
+on_rename_volume_group (StorageDaemon *daemon,
+                        StorageVolumeGroup *group,
                         gpointer user_data)
 {
   CompleteClosure *complete = user_data;
 
-  if (g_str_equal (ul_volume_group_get_name (group), complete->wait_name))
+  if (g_str_equal (storage_volume_group_get_name (group), complete->wait_name))
     {
       lvm_volume_group_complete_rename (NULL, complete->invocation,
-                                        ul_volume_group_get_object_path (group));
+                                        storage_volume_group_get_object_path (group));
       g_signal_handler_disconnect (daemon, complete->wait_sig);
     }
 }
@@ -853,7 +853,7 @@ on_rename_complete (UDisksJob *job,
 
   g_dbus_method_invocation_return_error (complete->invocation, UDISKS_ERROR,
                                          UDISKS_ERROR_FAILED, "Error renaming volume group: %s", message);
-  g_signal_handler_disconnect (ul_daemon_get (), complete->wait_sig);
+  g_signal_handler_disconnect (storage_daemon_get (), complete->wait_sig);
 }
 
 static gboolean
@@ -862,26 +862,26 @@ handle_rename (LvmVolumeGroup *group,
                const gchar *new_name,
                GVariant *options)
 {
-  UlVolumeGroup *self = UL_VOLUME_GROUP (group);
+  StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (group);
   CompleteClosure *complete;
-  UlJob *job;
-  UlDaemon *daemon;
+  StorageJob *job;
+  StorageDaemon *daemon;
   gchar *encoded_new_name = NULL;
 
-  daemon = ul_daemon_get ();
-  encoded_new_name = ul_util_encode_lvm_name (new_name, FALSE);
+  daemon = storage_daemon_get ();
+  encoded_new_name = storage_util_encode_lvm_name (new_name, FALSE);
 
-  job = ul_daemon_launch_spawned_job (daemon, self,
-                                      "lvm-vg-rename",
-                                      ul_invocation_get_caller_uid (invocation),
-                                      NULL, /* GCancellable */
-                                      0,    /* uid_t run_as_uid */
-                                      0,    /* uid_t run_as_euid */
-                                      NULL,  /* input_string */
-                                      "vgrename",
-                                      ul_volume_group_get_name (self),
-                                      encoded_new_name,
-                                      NULL);
+  job = storage_daemon_launch_spawned_job (daemon, self,
+                                           "lvm-vg-rename",
+                                           storage_invocation_get_caller_uid (invocation),
+                                           NULL, /* GCancellable */
+                                           0,    /* uid_t run_as_uid */
+                                           0,    /* uid_t run_as_euid */
+                                           NULL,  /* input_string */
+                                           "vgrename",
+                                           storage_volume_group_get_name (self),
+                                           encoded_new_name,
+                                           NULL);
 
   complete = g_new0 (CompleteClosure, 1);
   complete->invocation = g_object_ref (invocation);
@@ -892,7 +892,7 @@ handle_rename (LvmVolumeGroup *group,
 
   /* Wait for the object to appear */
   complete->wait_sig = g_signal_connect_data (daemon,
-                                              "published::UlVolumeGroup",
+                                              "published::StorageVolumeGroup",
                                               G_CALLBACK (on_rename_volume_group),
                                               complete, complete_closure_free, 0);
 
@@ -925,43 +925,43 @@ handle_add_device (LvmVolumeGroup *group,
                    const gchar *new_member_device_objpath,
                    GVariant *options)
 {
-  UlVolumeGroup *self = UL_VOLUME_GROUP (group);
-  UlJob *job;
-  UlDaemon *daemon;
-  UlManager *manager;
+  StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (group);
+  StorageJob *job;
+  StorageDaemon *daemon;
+  StorageManager *manager;
   GError *error = NULL;
-  UlBlock *new_member_device = NULL;
+  StorageBlock *new_member_device = NULL;
 
-  daemon = ul_daemon_get ();
-  manager = ul_daemon_get_manager (daemon);
+  daemon = storage_daemon_get ();
+  manager = storage_daemon_get_manager (daemon);
 
-  new_member_device = ul_manager_find_block (manager, new_member_device_objpath);
+  new_member_device = storage_manager_find_block (manager, new_member_device_objpath);
   if (new_member_device == NULL)
     {
       g_dbus_method_invocation_return_error (invocation, UDISKS_ERROR, UDISKS_ERROR_FAILED,
                                              "The given object is not a valid block");
     }
-  else if (!ul_block_is_unused (new_member_device, &error))
+  else if (!storage_block_is_unused (new_member_device, &error))
     {
       g_dbus_method_invocation_take_error (invocation, error);
     }
-  else if (!ul_util_wipe_block (ul_block_get_device (new_member_device), &error))
+  else if (!storage_util_wipe_block (storage_block_get_device (new_member_device), &error))
     {
       g_dbus_method_invocation_take_error (invocation, error);
     }
   else
     {
-      job = ul_daemon_launch_spawned_job (daemon, self,
-                                          "lvm-vg-add-device",
-                                          ul_invocation_get_caller_uid (invocation),
-                                          NULL, /* GCancellable */
-                                          0,    /* uid_t run_as_uid */
-                                          0,    /* uid_t run_as_euid */
-                                          NULL,  /* input_string */
-                                          "vgextend",
-                                          ul_volume_group_get_name (self),
-                                          ul_block_get_device (new_member_device),
-                                          NULL);
+      job = storage_daemon_launch_spawned_job (daemon, self,
+                                               "lvm-vg-add-device",
+                                               storage_invocation_get_caller_uid (invocation),
+                                               NULL, /* GCancellable */
+                                               0,    /* uid_t run_as_uid */
+                                               0,    /* uid_t run_as_euid */
+                                               NULL,  /* input_string */
+                                               "vgextend",
+                                               storage_volume_group_get_name (self),
+                                               storage_block_get_device (new_member_device),
+                                               NULL);
 
       g_signal_connect_data (job, "completed", G_CALLBACK (on_adddev_complete),
                              g_object_ref (invocation), (GClosureNotify)g_object_unref, 0);
@@ -1008,9 +1008,9 @@ volume_group_remdev_job_thread (GCancellable *cancellable,
 
   if (ret)
     {
-      ret = ul_util_check_status_and_output ("vgreduce",
-                                             exit_status, standard_output,
-                                             standard_error, error);
+      ret = storage_util_check_status_and_output ("vgreduce",
+                                                  exit_status, standard_output,
+                                                  standard_error, error);
     }
 
   g_free (standard_output);
@@ -1027,9 +1027,9 @@ volume_group_remdev_job_thread (GCancellable *cancellable,
 
       if (ret)
         {
-          ret = ul_util_check_status_and_output ("wipefs",
-                                                 exit_status, standard_output,
-                                                 standard_error, error);
+          ret = storage_util_check_status_and_output ("wipefs",
+                                                      exit_status, standard_output,
+                                                      standard_error, error);
         }
 
       g_free (standard_output);
@@ -1063,17 +1063,17 @@ handle_remove_device (LvmVolumeGroup *group,
                       const gchar *member_device_objpath,
                       GVariant *options)
 {
-  UlVolumeGroup *self = UL_VOLUME_GROUP (group);
+  StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (group);
   VolumeGroupRemdevJobData *data;
-  UlDaemon *daemon;
-  UlManager *manager;
-  UlBlock *member_device;
-  UlJob *job;
+  StorageDaemon *daemon;
+  StorageManager *manager;
+  StorageBlock *member_device;
+  StorageJob *job;
 
-  daemon = ul_daemon_get ();
-  manager = ul_daemon_get_manager (daemon);
+  daemon = storage_daemon_get ();
+  manager = storage_daemon_get_manager (daemon);
 
-  member_device = ul_manager_find_block (manager, member_device_objpath);
+  member_device = storage_manager_find_block (manager, member_device_objpath);
   if (member_device == NULL)
     {
       g_dbus_method_invocation_return_error (invocation, UDISKS_ERROR, UDISKS_ERROR_FAILED,
@@ -1083,16 +1083,16 @@ handle_remove_device (LvmVolumeGroup *group,
 
   data = g_new0 (VolumeGroupRemdevJobData, 1);
   g_variant_lookup (options, "wipe", "b", &data->wipe);
-  data->vgname = g_strdup (ul_volume_group_get_name (self));
-  data->pvname = g_strdup (ul_block_get_device (member_device));
+  data->vgname = g_strdup (storage_volume_group_get_name (self));
+  data->pvname = g_strdup (storage_block_get_device (member_device));
 
-  job = ul_daemon_launch_threaded_job (daemon, self,
-                                       "lvm-vg-rem-device",
-                                       ul_invocation_get_caller_uid (invocation),
-                                       volume_group_remdev_job_thread,
-                                       data,
-                                       volume_group_remdev_job_free,
-                                       NULL);
+  job = storage_daemon_launch_threaded_job (daemon, self,
+                                            "lvm-vg-rem-device",
+                                            storage_invocation_get_caller_uid (invocation),
+                                            volume_group_remdev_job_thread,
+                                            data,
+                                            volume_group_remdev_job_free,
+                                            NULL);
 
   g_signal_connect_data (job, "completed", G_CALLBACK (on_remdev_complete),
                          g_object_ref (invocation), (GClosureNotify)g_object_unref, 0);
@@ -1127,18 +1127,18 @@ handle_empty_device (LvmVolumeGroup *group,
                      const gchar *member_device_objpath,
                      GVariant *options)
 {
-  UlJob *job;
-  UlDaemon *daemon;
-  UlManager *manager;
+  StorageJob *job;
+  StorageDaemon *daemon;
+  StorageManager *manager;
   const gchar *member_device_file = NULL;
-  UlBlock *member_device = NULL;
+  StorageBlock *member_device = NULL;
   gboolean no_block = FALSE;
 
-  daemon = ul_daemon_get ();
-  manager = ul_daemon_get_manager (daemon);
+  daemon = storage_daemon_get ();
+  manager = storage_daemon_get_manager (daemon);
   g_variant_lookup (options, "no-block", "b", &no_block);
 
-  member_device = ul_manager_find_block (manager, member_device_objpath);
+  member_device = storage_manager_find_block (manager, member_device_objpath);
   if (member_device == NULL)
     {
       g_dbus_method_invocation_return_error (invocation, UDISKS_ERROR, UDISKS_ERROR_FAILED,
@@ -1146,19 +1146,19 @@ handle_empty_device (LvmVolumeGroup *group,
       return TRUE;
     }
 
-  member_device_file = ul_block_get_device (member_device);
+  member_device_file = storage_block_get_device (member_device);
 
-  job = ul_daemon_launch_spawned_job (daemon, member_device,
-                                      "lvm-vg-empty-device",
-                                      ul_invocation_get_caller_uid (invocation),
-                                      NULL, /* GCancellable */
-                                      0,    /* uid_t run_as_uid */
-                                      0,    /* uid_t run_as_euid */
-                                      NULL,  /* input_string */
-                                      "pvmove",
-                                      no_block ? "-b" : member_device_file,
-                                      no_block ? member_device_file : NULL,
-                                      NULL);
+  job = storage_daemon_launch_spawned_job (daemon, member_device,
+                                           "lvm-vg-empty-device",
+                                           storage_invocation_get_caller_uid (invocation),
+                                           NULL, /* GCancellable */
+                                           0,    /* uid_t run_as_uid */
+                                           0,    /* uid_t run_as_euid */
+                                           NULL,  /* input_string */
+                                           "pvmove",
+                                           no_block ? "-b" : member_device_file,
+                                           no_block ? member_device_file : NULL,
+                                           NULL);
 
   g_signal_connect_data (job, "completed", G_CALLBACK (on_empty_complete),
                          g_object_ref (invocation), (GClosureNotify)g_object_unref, 0);
@@ -1170,18 +1170,18 @@ handle_empty_device (LvmVolumeGroup *group,
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
-on_create_logical_volume (UlDaemon *daemon,
-                          UlLogicalVolume *volume,
+on_create_logical_volume (StorageDaemon *daemon,
+                          StorageLogicalVolume *volume,
                           gpointer user_data)
 {
   CompleteClosure *complete = user_data;
 
-  if (g_str_equal (ul_logical_volume_get_name (volume), complete->wait_name) &&
-      ul_logical_volume_get_volume_group (volume) == UL_VOLUME_GROUP (complete->wait_thing))
+  if (g_str_equal (storage_logical_volume_get_name (volume), complete->wait_name) &&
+      storage_logical_volume_get_volume_group (volume) == STORAGE_VOLUME_GROUP (complete->wait_thing))
     {
       /* All creates have the same signature */
       lvm_volume_group_complete_create_plain_volume (NULL, complete->invocation,
-                                                     ul_logical_volume_get_object_path (volume));
+                                                     storage_logical_volume_get_object_path (volume));
       g_signal_handler_disconnect (daemon, complete->wait_sig);
     }
 }
@@ -1199,7 +1199,7 @@ on_create_complete (UDisksJob *job,
 
   g_dbus_method_invocation_return_error (complete->invocation, UDISKS_ERROR,
                                          UDISKS_ERROR_FAILED, "Error creating logical volume: %s", message);
-  g_signal_handler_disconnect (ul_daemon_get (), complete->wait_sig);
+  g_signal_handler_disconnect (storage_daemon_get (), complete->wait_sig);
 }
 
 static gboolean
@@ -1211,21 +1211,21 @@ handle_create_plain_volume (LvmVolumeGroup *group,
                             guint64 arg_stripesize,
                             GVariant *options)
 {
-  UlVolumeGroup *self = UL_VOLUME_GROUP (group);
+  StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (group);
   CompleteClosure *complete;
-  UlJob *job;
-  UlDaemon *daemon;
+  StorageJob *job;
+  StorageDaemon *daemon;
   gchar *encoded_volume_name = NULL;
   GPtrArray *argv;
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
-  encoded_volume_name = ul_util_encode_lvm_name (arg_name, TRUE);
+  encoded_volume_name = storage_util_encode_lvm_name (arg_name, TRUE);
   arg_size -= arg_size % 512;
 
   argv = g_ptr_array_new_with_free_func (g_free);
   g_ptr_array_add (argv, g_strdup ("lvcreate"));
-  g_ptr_array_add (argv, g_strdup (ul_volume_group_get_name (self)));
+  g_ptr_array_add (argv, g_strdup (storage_volume_group_get_name (self)));
   g_ptr_array_add (argv, g_strdup_printf ("-L%" G_GUINT64_FORMAT "b", arg_size));
   g_ptr_array_add (argv, g_strdup ("-n"));
   g_ptr_array_add (argv, g_strdup (encoded_volume_name));
@@ -1244,14 +1244,14 @@ handle_create_plain_volume (LvmVolumeGroup *group,
 
   g_ptr_array_add (argv, NULL);
 
-  job = ul_daemon_launch_spawned_jobv (daemon, self,
-                                       "lvm-vg-create-volume",
-                                       ul_invocation_get_caller_uid (invocation),
-                                       NULL, /* GCancellable */
-                                       0,    /* uid_t run_as_uid */
-                                       0,    /* uid_t run_as_euid */
-                                       NULL,  /* input_string */
-                                       (const gchar **)argv->pdata);
+  job = storage_daemon_launch_spawned_jobv (daemon, self,
+                                            "lvm-vg-create-volume",
+                                            storage_invocation_get_caller_uid (invocation),
+                                            NULL, /* GCancellable */
+                                            0,    /* uid_t run_as_uid */
+                                            0,    /* uid_t run_as_euid */
+                                            NULL,  /* input_string */
+                                            (const gchar **)argv->pdata);
 
   complete = g_new0 (CompleteClosure, 1);
   complete->invocation = g_object_ref (invocation);
@@ -1263,7 +1263,7 @@ handle_create_plain_volume (LvmVolumeGroup *group,
 
   /* Wait for the object to appear */
   complete->wait_sig = g_signal_connect_data (daemon,
-                                              "published::UlLogicalVolume",
+                                              "published::StorageLogicalVolume",
                                               G_CALLBACK (on_create_logical_volume),
                                               complete, complete_closure_free, 0);
 
@@ -1280,31 +1280,31 @@ handle_create_thin_pool_volume (LvmVolumeGroup *group,
                                 guint64 arg_size,
                                 GVariant *options)
 {
-  UlVolumeGroup *self = UL_VOLUME_GROUP (group);
+  StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (group);
   CompleteClosure *complete;
-  UlJob *job;
-  UlDaemon *daemon;
+  StorageJob *job;
+  StorageDaemon *daemon;
   gchar *encoded_volume_name = NULL;
   gchar *size;
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
-  encoded_volume_name = ul_util_encode_lvm_name (arg_name, TRUE);
+  encoded_volume_name = storage_util_encode_lvm_name (arg_name, TRUE);
   arg_size -= arg_size % 512;
 
   size = g_strdup_printf ("%" G_GUINT64_FORMAT "b", arg_size);
 
-  job = ul_daemon_launch_spawned_job (daemon, self,
-                                      "lvm-vg-create-volume",
-                                      ul_invocation_get_caller_uid (invocation),
-                                      NULL, /* GCancellable */
-                                      0,    /* uid_t run_as_uid */
-                                      0,    /* uid_t run_as_euid */
-                                      NULL,  /* input_string */
-                                      "lvcreate",
-                                      ul_volume_group_get_name (self),
-                                      "-T", "-L", size, "--thinpool",
-                                      encoded_volume_name, NULL);
+  job = storage_daemon_launch_spawned_job (daemon, self,
+                                           "lvm-vg-create-volume",
+                                           storage_invocation_get_caller_uid (invocation),
+                                           NULL, /* GCancellable */
+                                           0,    /* uid_t run_as_uid */
+                                           0,    /* uid_t run_as_euid */
+                                           NULL,  /* input_string */
+                                           "lvcreate",
+                                           storage_volume_group_get_name (self),
+                                           "-T", "-L", size, "--thinpool",
+                                           encoded_volume_name, NULL);
 
   complete = g_new0 (CompleteClosure, 1);
   complete->invocation = g_object_ref (invocation);
@@ -1316,7 +1316,7 @@ handle_create_thin_pool_volume (LvmVolumeGroup *group,
 
   /* Wait for the object to appear */
   complete->wait_sig = g_signal_connect_data (daemon,
-                                              "published::UlLogicalVolume",
+                                              "published::StorageLogicalVolume",
                                               G_CALLBACK (on_create_logical_volume),
                                               complete, complete_closure_free, 0);
 
@@ -1334,17 +1334,17 @@ handle_create_thin_volume (LvmVolumeGroup *group,
                            const gchar *arg_pool,
                            GVariant *options)
 {
-  UlVolumeGroup *self = UL_VOLUME_GROUP (group);
+  StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (group);
   CompleteClosure *complete;
-  UlJob *job;
-  UlDaemon *daemon;
+  StorageJob *job;
+  StorageDaemon *daemon;
   gchar *encoded_volume_name = NULL;
-  UlLogicalVolume *pool;
+  StorageLogicalVolume *pool;
   gchar *size;
 
-  daemon = ul_daemon_get ();
+  daemon = storage_daemon_get ();
 
-  pool = ul_daemon_find_thing (daemon, arg_pool, UL_TYPE_LOGICAL_VOLUME);
+  pool = storage_daemon_find_thing (daemon, arg_pool, STORAGE_TYPE_LOGICAL_VOLUME);
   if (pool == NULL)
     {
       g_dbus_method_invocation_return_error (invocation, UDISKS_ERROR, UDISKS_ERROR_FAILED,
@@ -1352,22 +1352,22 @@ handle_create_thin_volume (LvmVolumeGroup *group,
       return TRUE;
     }
 
-  encoded_volume_name = ul_util_encode_lvm_name (arg_name, TRUE);
+  encoded_volume_name = storage_util_encode_lvm_name (arg_name, TRUE);
   arg_size -= arg_size % 512;
 
   size = g_strdup_printf ("%" G_GUINT64_FORMAT "b", arg_size);
 
-  job = ul_daemon_launch_spawned_job (daemon, self,
-                                      "lvm-vg-create-volume",
-                                      ul_invocation_get_caller_uid (invocation),
-                                      NULL, /* GCancellable */
-                                      0,    /* uid_t run_as_uid */
-                                      0,    /* uid_t run_as_euid */
-                                      NULL,  /* input_string */
-                                      "lvcreate",
-                                      ul_volume_group_get_name (self),
-                                      "--thinpool", ul_logical_volume_get_name (pool),
-                                      "-V", size, "-n", encoded_volume_name, NULL);
+  job = storage_daemon_launch_spawned_job (daemon, self,
+                                           "lvm-vg-create-volume",
+                                           storage_invocation_get_caller_uid (invocation),
+                                           NULL, /* GCancellable */
+                                           0,    /* uid_t run_as_uid */
+                                           0,    /* uid_t run_as_euid */
+                                           NULL,  /* input_string */
+                                           "lvcreate",
+                                           storage_volume_group_get_name (self),
+                                           "--thinpool", storage_logical_volume_get_name (pool),
+                                           "-V", size, "-n", encoded_volume_name, NULL);
 
   complete = g_new0 (CompleteClosure, 1);
   complete->invocation = g_object_ref (invocation);
@@ -1379,7 +1379,7 @@ handle_create_thin_volume (LvmVolumeGroup *group,
 
   /* Wait for the object to appear */
   complete->wait_sig = g_signal_connect_data (daemon,
-                                              "published::UlLogicalVolume",
+                                              "published::StorageLogicalVolume",
                                               G_CALLBACK (on_create_logical_volume),
                                               complete, complete_closure_free, 0);
 
@@ -1409,21 +1409,21 @@ volume_group_iface_init (LvmVolumeGroupIface *iface)
 
 
 void
-ul_volume_group_poll (UlVolumeGroup *self)
+storage_volume_group_poll (StorageVolumeGroup *self)
 {
   g_idle_add (poll_in_main, g_object_ref (self));
 }
 
-UlLogicalVolume *
-ul_volume_group_find_logical_volume (UlVolumeGroup *self,
-                                     const gchar *name)
+StorageLogicalVolume *
+storage_volume_group_find_logical_volume (StorageVolumeGroup *self,
+                                          const gchar *name)
 {
   return g_hash_table_lookup (self->logical_volumes, name);
 }
 
 /**
- * ul_volume_group_object_get_name:
- * @self: A #UlVolumeGroupObject.
+ * storage_volume_group_object_get_name:
+ * @self: A #StorageVolumeGroupObject.
  *
  * Gets the name for @object.
  *
@@ -1431,15 +1431,15 @@ ul_volume_group_find_logical_volume (UlVolumeGroup *self,
  *          string belongs to object.
  */
 const gchar *
-ul_volume_group_get_name (UlVolumeGroup *self)
+storage_volume_group_get_name (StorageVolumeGroup *self)
 {
-  g_return_val_if_fail (UL_IS_VOLUME_GROUP (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_VOLUME_GROUP (self), NULL);
   return self->name;
 }
 
 const gchar *
-ul_volume_group_get_object_path (UlVolumeGroup *self)
+storage_volume_group_get_object_path (StorageVolumeGroup *self)
 {
-  g_return_val_if_fail (UL_IS_VOLUME_GROUP (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_VOLUME_GROUP (self), NULL);
   return g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (self));
 }

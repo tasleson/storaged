@@ -187,9 +187,9 @@ main (int argc,
 
   if (testing_target_init ())
     {
-      g_test_add ("/udisks/lvm/block-list", Test, NULL,
+      g_test_add ("/storaged/lvm/block-list", Test, NULL,
                   setup_target, test_objects, teardown_target);
-      g_test_add ("/udisks/lvm/block-add-remove", Test, NULL,
+      g_test_add ("/storaged/lvm/block-add-remove", Test, NULL,
                   setup_target, test_add_remove, teardown_target);
     }
 

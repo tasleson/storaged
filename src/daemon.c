@@ -38,8 +38,8 @@
 #include <stdio.h>
 
 /**
- * SECTION:udisksdaemon
- * @title: UlDaemon
+ * SECTION:storaged-daemon
+ * @title: StorageDaemon
  * @short_description: Main daemon object
  *
  * Object holding all global state.
@@ -54,17 +54,17 @@ enum {
 static guint signals[NUM_SIGNALS] = { 0, };
 
 /* The only daemon that should be created is tracked here */
-static UlDaemon *default_daemon = NULL;
+static StorageDaemon *default_daemon = NULL;
 
-typedef struct _UlDaemonClass   UlDaemonClass;
+typedef struct _StorageDaemonClass   StorageDaemonClass;
 
 /**
- * UlDaemon:
+ * StorageDaemon:
  *
- * The #UlDaemon structure contains only private data and should
+ * The #StorageDaemon structure contains only private data and should
  * only be accessed using the provided API.
  */
-struct _UlDaemon
+struct _StorageDaemon
 {
   GObject parent_instance;
   GDBusConnection *connection;
@@ -76,7 +76,7 @@ struct _UlDaemon
   gboolean persist;
 
   GDBusObjectManagerServer *object_manager;
-  UlManager *manager;
+  StorageManager *manager;
 
   /* may be NULL if polkit is masked */
   PolkitAuthority *authority;
@@ -85,7 +85,7 @@ struct _UlDaemon
   gchar *resource_dir;
 };
 
-struct _UlDaemonClass
+struct _StorageDaemonClass
 {
   GObjectClass parent_class;
 };
@@ -100,12 +100,12 @@ enum
   PROP_PERSIST,
 };
 
-G_DEFINE_TYPE (UlDaemon, ul_daemon, G_TYPE_OBJECT);
+G_DEFINE_TYPE (StorageDaemon, storage_daemon, G_TYPE_OBJECT);
 
 static void
-ul_daemon_finalize (GObject *object)
+storage_daemon_finalize (GObject *object)
 {
-  UlDaemon *self = UL_DAEMON (object);
+  StorageDaemon *self = STORAGE_DAEMON (object);
 
   if (self->name_owner_id)
     g_bus_unown_name (self->name_owner_id);
@@ -115,20 +115,20 @@ ul_daemon_finalize (GObject *object)
   g_object_unref (self->object_manager);
   g_free (self->resource_dir);
 
-  ul_invocation_cleanup ();
+  storage_invocation_cleanup ();
 
-  G_OBJECT_CLASS (ul_daemon_parent_class)->finalize (object);
+  G_OBJECT_CLASS (storage_daemon_parent_class)->finalize (object);
 
   default_daemon = NULL;
 }
 
 static void
-ul_daemon_get_property (GObject    *object,
-                            guint       prop_id,
-                            GValue     *value,
-                            GParamSpec *pspec)
+storage_daemon_get_property (GObject *object,
+                             guint prop_id,
+                             GValue *value,
+                             GParamSpec *pspec)
 {
-  UlDaemon *self = UL_DAEMON (object);
+  StorageDaemon *self = STORAGE_DAEMON (object);
 
   switch (prop_id)
     {
@@ -143,12 +143,12 @@ ul_daemon_get_property (GObject    *object,
 }
 
 static void
-ul_daemon_set_property (GObject      *object,
-                            guint         prop_id,
-                            const GValue *value,
-                            GParamSpec   *pspec)
+storage_daemon_set_property (GObject *object,
+                             guint prop_id,
+                             const GValue *value,
+                             GParamSpec *pspec)
 {
-  UlDaemon *self = UL_DAEMON (object);
+  StorageDaemon *self = STORAGE_DAEMON (object);
 
   switch (prop_id)
     {
@@ -177,7 +177,7 @@ ul_daemon_set_property (GObject      *object,
 }
 
 static void
-ul_daemon_init (UlDaemon *self)
+storage_daemon_init (StorageDaemon *self)
 {
   g_assert (default_daemon == NULL);
   default_daemon = self;
@@ -186,7 +186,7 @@ ul_daemon_init (UlDaemon *self)
 }
 
 static void
-maybe_finished (UlDaemon *self)
+maybe_finished (StorageDaemon *self)
 {
   if (!self->persist && !self->name_owned &&
       self->num_clients == 0 && self->num_jobs == 0)
@@ -201,7 +201,7 @@ on_name_lost (GDBusConnection *connection,
               const gchar *name,
               gpointer user_data)
 {
-  UlDaemon *self = user_data;
+  StorageDaemon *self = user_data;
   g_message ("Lost (or failed to acquire) the name %s on the system message bus", name);
   self->name_owned = FALSE;
   maybe_finished (self);
@@ -212,7 +212,7 @@ on_name_acquired (GDBusConnection *connection,
                   const gchar *bus_name,
                   gpointer user_data)
 {
-  UlDaemon *self = user_data;
+  StorageDaemon *self = user_data;
   g_info ("Acquired the name %s on the system message bus", bus_name);
   self->name_owned = TRUE;
 }
@@ -221,7 +221,7 @@ static void
 on_client_appeared (const gchar *bus_name,
                     gpointer user_data)
 {
-  UlDaemon *self = user_data;
+  StorageDaemon *self = user_data;
   g_debug ("Saw new client: %s", bus_name);
   self->num_clients++;
 }
@@ -230,7 +230,7 @@ static void
 on_client_disappeared (const gchar *bus_name,
                        gpointer user_data)
 {
-  UlDaemon *self = user_data;
+  StorageDaemon *self = user_data;
 
   g_assert (self->num_clients > 0);
   self->num_clients--;
@@ -256,15 +256,15 @@ on_client_disappeared (const gchar *bus_name,
 }
 
 static void
-ul_daemon_constructed (GObject *object)
+storage_daemon_constructed (GObject *object)
 {
-  UlDaemon *self = UL_DAEMON (object);
+  StorageDaemon *self = STORAGE_DAEMON (object);
   GDBusObjectSkeleton *skeleton;
   GError *error;
 
-  G_OBJECT_CLASS (ul_daemon_parent_class)->constructed (object);
+  G_OBJECT_CLASS (storage_daemon_parent_class)->constructed (object);
 
-  ul_invocation_initialize (self->connection,
+  storage_invocation_initialize (self->connection,
                             on_client_appeared,
                             on_client_disappeared,
                             self);
@@ -284,7 +284,7 @@ ul_daemon_constructed (GObject *object)
   /* Export the ObjectManager */
   g_dbus_object_manager_server_set_connection (self->object_manager, self->connection);
 
-  self->manager = ul_manager_new ();
+  self->manager = storage_manager_new ();
 
   skeleton = G_DBUS_OBJECT_SKELETON (lvm_object_skeleton_new ("/org/freedesktop/UDisks2/Manager"));
   g_dbus_object_skeleton_add_interface (skeleton, G_DBUS_INTERFACE_SKELETON (self->manager));
@@ -301,18 +301,18 @@ ul_daemon_constructed (GObject *object)
 }
 
 static void
-ul_daemon_class_init (UlDaemonClass *klass)
+storage_daemon_class_init (StorageDaemonClass *klass)
 {
   GObjectClass *gobject_class;
 
   gobject_class = G_OBJECT_CLASS (klass);
-  gobject_class->finalize = ul_daemon_finalize;
-  gobject_class->constructed = ul_daemon_constructed;
-  gobject_class->set_property = ul_daemon_set_property;
-  gobject_class->get_property = ul_daemon_get_property;
+  gobject_class->finalize = storage_daemon_finalize;
+  gobject_class->constructed = storage_daemon_constructed;
+  gobject_class->set_property = storage_daemon_set_property;
+  gobject_class->get_property = storage_daemon_get_property;
 
   /**
-   * UlDaemon:connection:
+   * StorageDaemon:connection:
    *
    * The #GDBusConnection the daemon is for.
    */
@@ -327,7 +327,7 @@ ul_daemon_class_init (UlDaemonClass *klass)
                                                         G_PARAM_STATIC_STRINGS));
 
   /**
-   * UlDaemon:object-manager:
+   * StorageDaemon:object-manager:
    *
    * The #GDBusObjectManager used by the daemon
    */
@@ -371,14 +371,14 @@ ul_daemon_class_init (UlDaemonClass *klass)
                                                          G_PARAM_STATIC_STRINGS));
 
   signals[PUBLISHED] = g_signal_new ("published",
-                                     UL_TYPE_DAEMON,
+                                     STORAGE_TYPE_DAEMON,
                                      G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
                                      0, NULL, NULL,
                                      g_cclosure_marshal_generic,
                                      G_TYPE_NONE, 1, G_TYPE_DBUS_OBJECT);
 
   signals[FINISHED] = g_signal_new ("finished",
-                                     UL_TYPE_DAEMON,
+                                     STORAGE_TYPE_DAEMON,
                                      G_SIGNAL_RUN_LAST,
                                      0, NULL, NULL,
                                      g_cclosure_marshal_generic,
@@ -386,33 +386,33 @@ ul_daemon_class_init (UlDaemonClass *klass)
 
 }
 
-UlDaemon *
-ul_daemon_get (void)
+StorageDaemon *
+storage_daemon_get (void)
 {
   g_assert (default_daemon != NULL);
   return default_daemon;
 }
 
-UlManager *
-ul_daemon_get_manager (UlDaemon *self)
+StorageManager *
+storage_daemon_get_manager (StorageDaemon *self)
 {
-  g_return_val_if_fail (UL_IS_DAEMON (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_DAEMON (self), NULL);
   return self->manager;
 }
 
 gchar *
-ul_daemon_get_resource_path (UlDaemon *self,
-                             gboolean arch_specific,
-                             const gchar *file)
+storage_daemon_get_resource_path (StorageDaemon *self,
+                                  gboolean arch_specific,
+                                  const gchar *file)
 {
-  g_return_val_if_fail (UL_IS_DAEMON (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_DAEMON (self), NULL);
 
   if (self->resource_dir)
       return g_build_filename (self->resource_dir, file, NULL);
   else if (arch_specific)
-      return g_build_filename (PACKAGE_LIB_DIR, "udisks2", file, NULL);
+      return g_build_filename (PACKAGE_LIB_DIR, "storaged", file, NULL);
   else
-      return g_build_filename (PACKAGE_DATA_DIR, "udisks2", file, NULL);
+      return g_build_filename (PACKAGE_DATA_DIR, "storaged", file, NULL);
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
@@ -423,7 +423,7 @@ on_job_completed (UDisksJob *job,
                   const gchar *message,
                   gpointer user_data)
 {
-  UlDaemon *self = UL_DAEMON (user_data);
+  StorageDaemon *self = STORAGE_DAEMON (user_data);
   GDBusObject *object;
 
   object = g_dbus_interface_get_object (G_DBUS_INTERFACE (job));
@@ -437,7 +437,7 @@ on_job_completed (UDisksJob *job,
   g_object_unref (job);
 
   /* returns the reference we took when connecting to the
-   * UDisksJob::completed signal in ul_daemon_launch_{spawned,threaded}_job()
+   * UDisksJob::completed signal in storage_daemon_launch_{spawned,threaded}_job()
    * below
    */
   g_object_unref (self);
@@ -454,8 +454,8 @@ static guint job_id = 0;
 /* ---------------------------------------------------------------------------------------------------- */
 
 /**
- * ul_daemon_launch_spawned_job:
- * @self: A #UlDaemon.
+ * storage_daemon_launch_spawned_job:
+ * @self: A #StorageDaemon.
  * @object: (allow-none): A #LvmObject to add to the job or %NULL.
  * @job_operation: The operation for the job.
  * @job_started_by_uid: The user who started the job.
@@ -479,23 +479,23 @@ static guint job_id = 0;
  * Returns: A #UDisksSpawnedJob object. Do not free, the object
  * belongs to @manager.
  */
-UlJob *
-ul_daemon_launch_spawned_job (UlDaemon *self,
-                              gpointer object_or_interface,
-                              const gchar *job_operation,
-                              uid_t job_started_by_uid,
-                              GCancellable *cancellable,
-                              uid_t run_as_uid,
-                              uid_t run_as_euid,
-                              const gchar *input_string,
-                              const gchar *first_arg,
-                              ...)
+StorageJob *
+storage_daemon_launch_spawned_job (StorageDaemon *self,
+                                   gpointer object_or_interface,
+                                   const gchar *job_operation,
+                                   uid_t job_started_by_uid,
+                                   GCancellable *cancellable,
+                                   uid_t run_as_uid,
+                                   uid_t run_as_euid,
+                                   const gchar *input_string,
+                                   const gchar *first_arg,
+                                   ...)
 {
   GPtrArray *args;
-  UlJob *job;
+  StorageJob *job;
   va_list var_args;
 
-  g_return_val_if_fail (UL_IS_DAEMON (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_DAEMON (self), NULL);
   g_return_val_if_fail (cancellable == NULL || G_IS_CANCELLABLE (cancellable), NULL);
   g_return_val_if_fail (first_arg != NULL, NULL);
 
@@ -509,39 +509,39 @@ ul_daemon_launch_spawned_job (UlDaemon *self,
   va_end (var_args);
   g_ptr_array_add (args, NULL);
 
-  job = ul_daemon_launch_spawned_jobv (self, object_or_interface, job_operation,
-                                       job_started_by_uid, cancellable, run_as_uid,
-                                       run_as_euid, input_string,
-                                       (const gchar **)args->pdata);
+  job = storage_daemon_launch_spawned_jobv (self, object_or_interface, job_operation,
+                                            job_started_by_uid, cancellable, run_as_uid,
+                                            run_as_euid, input_string,
+                                            (const gchar **)args->pdata);
 
   g_ptr_array_free (args, TRUE);
 
   return job;
 }
 
-UlJob *
-ul_daemon_launch_spawned_jobv (UlDaemon *self,
-                               gpointer object_or_interface,
-                               const gchar *job_operation,
-                               uid_t job_started_by_uid,
-                               GCancellable *cancellable,
-                               uid_t run_as_uid,
-                               uid_t run_as_euid,
-                               const gchar *input_string,
-                               const gchar **argv)
+StorageJob *
+storage_daemon_launch_spawned_jobv (StorageDaemon *self,
+                                    gpointer object_or_interface,
+                                    const gchar *job_operation,
+                                    uid_t job_started_by_uid,
+                                    GCancellable *cancellable,
+                                    uid_t run_as_uid,
+                                    uid_t run_as_euid,
+                                    const gchar *input_string,
+                                    const gchar **argv)
 {
-  UlSpawnedJob *job;
+  StorageSpawnedJob *job;
   GDBusObjectSkeleton *job_object;
   gchar *job_object_path;
 
-  g_return_val_if_fail (UL_IS_DAEMON (self), NULL);
+  g_return_val_if_fail (STORAGE_IS_DAEMON (self), NULL);
   g_return_val_if_fail (cancellable == NULL || G_IS_CANCELLABLE (cancellable), NULL);
 
-  job = ul_spawned_job_new (argv, input_string,
-                            run_as_uid, run_as_euid, cancellable);
+  job = storage_spawned_job_new (argv, input_string,
+                                 run_as_uid, run_as_euid, cancellable);
 
   if (object_or_interface != NULL)
-    ul_job_add_thing (UL_JOB (job), object_or_interface);
+    storage_job_add_thing (STORAGE_JOB (job), object_or_interface);
 
   /* TODO: protect job_id by a mutex */
   job_object_path = g_strdup_printf ("/org/freedesktop/UDisks2/jobs/%d", job_id++);
@@ -562,13 +562,13 @@ ul_daemon_launch_spawned_jobv (UlDaemon *self,
                           g_object_ref (self));
 
   g_object_unref (job_object);
-  return UL_JOB (job);
+  return STORAGE_JOB (job);
 }
 
 /**
- * udisks_daemon_launch_threaded_job:
- * @daemon: A #UDisksDaemon.
- * @object: (allow-none): A #UDisksObject to add to the job or %NULL.
+ * storage_daemon_launch_threaded_job:
+ * @daemon: A #StorageDaemon.
+ * @object: (allow-none): An object to add to the job or %NULL.
  * @job_operation: The operation for the job.
  * @job_started_by_uid: The user who started the job.
  * @job_func: The function to run in another thread.
@@ -579,42 +579,42 @@ ul_daemon_launch_spawned_jobv (UlDaemon *self,
  * Launches a new job by running @job_func in a new dedicated thread.
  *
  * The job is started immediately - connect to the
- * #UDisksThreadedJob::threaded-job-completed or #UDisksJob::completed
+ * #StorageThreadedJob::threaded-job-completed or #StorageJob::completed
  * signals to get notified when the job is done.
  *
  * Long-running jobs should periodically check @cancellable to see if
  * they have been cancelled.
  *
  * The returned object will be exported on the bus until the
- * #UDisksJob::completed signal is emitted on the object. It is not
+ * #StorageJob::completed signal is emitted on the object. It is not
  * valid to use the returned object after this signal fires.
  *
- * Returns: A #UDisksThreadedJob object. Do not free, the object
+ * Returns: A #StorageThreadedJob object. Do not free, the object
  * belongs to @manager.
  */
-UlJob *
-ul_daemon_launch_threaded_job  (UlDaemon *daemon,
-                                gpointer object_or_interface,
-                                const gchar *job_operation,
-                                uid_t job_started_by_uid,
-                                UlJobFunc job_func,
-                                gpointer user_data,
-                                GDestroyNotify user_data_free_func,
-                                GCancellable *cancellable)
+StorageJob *
+storage_daemon_launch_threaded_job  (StorageDaemon *daemon,
+                                     gpointer object_or_interface,
+                                     const gchar *job_operation,
+                                     uid_t job_started_by_uid,
+                                     StorageJobFunc job_func,
+                                     gpointer user_data,
+                                     GDestroyNotify user_data_free_func,
+                                     GCancellable *cancellable)
 {
-  UlThreadedJob *job;
+  StorageThreadedJob *job;
   GDBusObjectSkeleton *job_object;
   gchar *job_object_path;
 
-  g_return_val_if_fail (UL_IS_DAEMON (daemon), NULL);
+  g_return_val_if_fail (STORAGE_IS_DAEMON (daemon), NULL);
   g_return_val_if_fail (job_func != NULL, NULL);
 
-  job = ul_threaded_job_new (job_func,
+  job = storage_threaded_job_new (job_func,
                              user_data,
                              user_data_free_func,
                              cancellable);
   if (object_or_interface != NULL)
-    ul_job_add_thing (UL_JOB (job), object_or_interface);
+    storage_job_add_thing (STORAGE_JOB (job), object_or_interface);
 
   /* TODO: protect job_id by a mutex */
   job_object_path = g_strdup_printf ("/org/freedesktop/UDisks2/jobs/%d", job_id++);
@@ -635,13 +635,13 @@ ul_daemon_launch_threaded_job  (UlDaemon *daemon,
                           g_object_ref (daemon));
 
   g_object_unref (job_object);
-  return UL_JOB (job);
+  return STORAGE_JOB (job);
 }
 
 gpointer
-ul_daemon_find_thing (UlDaemon *daemon,
-                      const gchar *object_path,
-                      GType type_of_thing)
+storage_daemon_find_thing (StorageDaemon *daemon,
+                           const gchar *object_path,
+                           GType type_of_thing)
 {
   GDBusObject *object;
   GList *interfaces, *l;
@@ -668,7 +668,7 @@ ul_daemon_find_thing (UlDaemon *daemon,
 }
 
 GList *
-ul_daemon_get_jobs (UlDaemon *self)
+storage_daemon_get_jobs (StorageDaemon *self)
 {
   GList *objects, *l;
   GList *jobs = NULL;
@@ -676,7 +676,7 @@ ul_daemon_get_jobs (UlDaemon *self)
   objects = g_dbus_object_manager_get_objects (G_DBUS_OBJECT_MANAGER (self->object_manager));
   for (l = objects; l != NULL; l = g_list_next (l))
     {
-      UlJob *job = UL_JOB (g_dbus_object_get_interface (l->data, "org.freedesktop.UDisks2.Job"));
+      StorageJob *job = STORAGE_JOB (g_dbus_object_get_interface (l->data, "org.freedesktop.UDisks2.Job"));
       if (job)
         jobs = g_list_prepend (jobs, job);
     }
@@ -758,11 +758,11 @@ variant_reader_destroy (gpointer user_data)
 }
 
 GPid
-ul_daemon_spawn_for_variant (UlDaemon *daemon,
-                             const gchar **argv,
-                             const GVariantType *type,
-                             void (*callback) (GPid, GVariant *, GError *, gpointer),
-                             gpointer user_data)
+storage_daemon_spawn_for_variant (StorageDaemon *daemon,
+                                  const gchar **argv,
+                                  const GVariantType *type,
+                                  void (*callback) (GPid, GVariant *, GError *, gpointer),
+                                  gpointer user_data)
 {
   GError *error = NULL;
   struct VariantReaderData *data;
@@ -772,13 +772,13 @@ ul_daemon_spawn_for_variant (UlDaemon *daemon,
   gchar *cmd;
 
   /*
-   * This is so we can override the location of udisks-lvm-helper
+   * This is so we can override the location of storaged-lvm-helper
    * during testing.
    */
 
   if (!strchr (argv[0], '/'))
     {
-      prog = ul_daemon_get_resource_path (daemon, TRUE, argv[0]);
+      prog = storage_daemon_get_resource_path (daemon, TRUE, argv[0]);
       argv[0] = prog;
     }
 
@@ -824,17 +824,17 @@ ul_daemon_spawn_for_variant (UlDaemon *daemon,
 }
 
 void
-ul_daemon_publish (UlDaemon *self,
-                   const gchar *path,
-                   gboolean uniquely,
-                   gpointer thing)
+storage_daemon_publish (StorageDaemon *self,
+                        const gchar *path,
+                        gboolean uniquely,
+                        gpointer thing)
 {
   GDBusInterface *prev;
   GDBusInterfaceInfo *info;
   GDBusObjectSkeleton *object;
   GQuark detail;
 
-  g_return_if_fail (UL_IS_DAEMON (self));
+  g_return_if_fail (STORAGE_IS_DAEMON (self));
   g_return_if_fail (path != NULL);
 
   if (G_IS_DBUS_INTERFACE (thing))
@@ -881,15 +881,15 @@ ul_daemon_publish (UlDaemon *self,
 }
 
 void
-ul_daemon_unpublish (UlDaemon *self,
-                     const gchar *path,
-                     gpointer thing)
+storage_daemon_unpublish (StorageDaemon *self,
+                          const gchar *path,
+                          gpointer thing)
 {
   GDBusObject *object;
   gboolean unexport = FALSE;
   GList *interfaces, *l;
 
-  g_return_if_fail (UL_IS_DAEMON (self));
+  g_return_if_fail (STORAGE_IS_DAEMON (self));
   g_return_if_fail (path != NULL);
 
   object = g_dbus_object_manager_get_object (G_DBUS_OBJECT_MANAGER (self->object_manager), path);
