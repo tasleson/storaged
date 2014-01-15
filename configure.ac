@@ -22,10 +22,12 @@ AC_SUBST(STORAGED_MINOR)
 AC_SUBST(STORAGED_MICRO)
 AC_SUBST(STORAGED_VERSION)
 
-AM_INIT_AUTOMAKE([1.9 foreign dist-bzip2 no-dist-gzip serial-tests])
 AC_CONFIG_SRCDIR([src])
 AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_MACRO_DIR([build/m4])
+AC_CONFIG_AUX_DIR([build/aux])
 
+AM_INIT_AUTOMAKE([1.9 foreign dist-bzip2 no-dist-gzip serial-tests])
 AM_MAINTAINER_MODE
 
 AC_PROG_CC
@@ -232,6 +234,25 @@ else
 fi
 
 AC_MSG_RESULT($debug_status)
+
+# Strict
+#
+
+AC_ARG_ENABLE(strict,
+              [AS_HELP_STRING([--enable-strict], [Strict code compilation])]
+             )
+
+AC_MSG_CHECKING([build strict])
+
+if test "$enable_strict" = "yes"; then
+	CFLAGS="$CFLAGS -Werror"
+	AC_DEFINE_UNQUOTED(WITH_STRICT, 1, [More strict checks])
+	strict_status="yes (-Werror, fatals)"
+else
+	strict_status="no"
+fi
+
+AC_MSG_RESULT($strict_status)
 
 # Generate
 #

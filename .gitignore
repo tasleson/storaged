@@ -55,4 +55,8 @@ src/tests/frob-*
 
 po/.intltool*
 
-
+build/doc/
+build/m4/*.m4
+build/po/
+build/src/
+build/storaged-[0-9]*

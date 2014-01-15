@@ -4,6 +4,8 @@ NULL =
 
 SUBDIRS = data src po doc
 
+ACLOCAL_AMFLAGS = -I build/m4
+
 EXTRA_DIST = 			\
 	HACKING 		\
 	$(NULL)
@@ -13,6 +15,7 @@ DISTCHECK_CONFIGURE_FLAGS=							\
 	--disable-introspection							\
 	--with-udevdir=$$dc_install_base/$(udevdir)				\
 	--with-systemdsystemunitdir=$$dc_install_base/$(systemdsystemunitdir)	\
+	CFLAGS='-O2' \
 	$(NULL)
 
 if WITH_COVERAGE

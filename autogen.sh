@@ -14,20 +14,22 @@
 # Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public License
-# along with Cockpit; If not, see <http://www.gnu.org/licenses/>.
+# along with storaged; If not, see <http://www.gnu.org/licenses/>.
 
 # Run this to generate all the initial makefiles, etc.
 
 set -eux
 
-srcdir=`dirname $0`
+srcdir=$(dirname $0)
 test -z "$srcdir" && srcdir=.
+
+oldpwd=$(pwd)
+cd $srcdir
 
 PKG_NAME="storaged"
 
-(test -f $srcdir/src/main.c) || {
-    echo -n "**Error**: Directory "\`$srcdir\'" does not look like the"
-    echo " top-level $PKG_NAME directory"
+(test -f ./src/main.c) || {
+    echo "Directory \"$srcdir\" does not look like the top-level $PKG_NAME directory"
     exit 1
 }
 
@@ -49,9 +51,8 @@ if test -z "${NOCONFIGURE:-}"; then
         echo "I am going to run ./configure with no arguments - if you wish "
         echo "to pass any to it, please specify them on the $0 command line."
     fi
-fi
 
-if test -z "${NOCONFIGURE:-}"; then
+    cd $oldpwd
     $srcdir/configure --enable-maintainer-mode ${AUTOGEN_CONFIGURE_ARGS:-} "$@" || exit $?
 
     echo
