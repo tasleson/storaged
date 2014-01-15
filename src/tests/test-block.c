@@ -113,7 +113,10 @@ test_add_remove (Test *test,
   gchar *losetup_out;
   gchar *device;
   gchar *name;
+  gchar *vgname;
   gint i;
+
+  vgname = testing_target_vgname ();
 
   g_signal_connect (test->objman, "object-added",
                     G_CALLBACK (on_block_path_copy), &block_path);
@@ -136,8 +139,11 @@ test_add_remove (Test *test,
     }
 
   /* Create a new loop device */
-  testing_target_execute (NULL, "dd", "if=/dev/zero", "of=test-udisk-lvm-1", "bs=1M", "count=1", "status=none", NULL);
+  testing_target_execute (NULL, "dd", "if=/dev/zero", "of=test-udisk-lvm-1", "bs=10M", "count=1", "status=none", NULL);
   testing_target_execute (NULL, "losetup", device, "test-udisk-lvm-1", NULL);
+
+  /* Use it as a physical volume */
+  testing_target_execute (NULL, "vgcreate", vgname, device, NULL);
 
   /* Wait for the device to appear */
   testing_wait_until (block_path != NULL);
@@ -154,6 +160,7 @@ test_add_remove (Test *test,
    * Actually make the devices go away, something that "losetup -d" doesn't
    * do ... You're using a test machine as the target, aren't you?
    */
+  testing_target_execute (NULL, "vgremove", vgname, NULL);
   testing_target_execute (&losetup_out, "losetup", "-D", NULL);
   testing_target_execute (&losetup_out, "rmmod", "loop", NULL);
 
@@ -161,6 +168,7 @@ test_add_remove (Test *test,
   testing_wait_until (block_path == NULL);
 
   g_free (device);
+  g_free (vgname);
 }
 
 GError *error = NULL;

@@ -65,6 +65,10 @@ void               ul_block_update_pv        (UlBlock *self,
                                               UlVolumeGroup *group,
                                               GVariant *pv_info);
 
+LvmLogicalVolumeBlock  *ul_block_get_logical_volume_block  (UlBlock *self);
+
+LvmPhysicalVolumeBlock *ul_block_get_physical_volume_block (UlBlock *self);
+
 G_END_DECLS
 
 #endif /* __UL_BLOCK_OBJECT_H__ */

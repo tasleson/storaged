@@ -45,8 +45,6 @@ gpointer                   ul_daemon_find_thing          (UlDaemon *self,
 
 GList *                    ul_daemon_get_jobs            (UlDaemon *self);
 
-GList *                    ul_daemon_get_blocks          (UlDaemon *self);
-
 UlManager *                ul_daemon_get_manager         (UlDaemon *self);
 
 gchar *                    ul_daemon_get_resource_path   (UlDaemon *self,

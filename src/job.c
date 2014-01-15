@@ -24,6 +24,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "block.h"
 #include "job.h"
 
 #define MAX_SAMPLES 100
@@ -251,6 +252,8 @@ ul_job_add_thing (UlJob *self,
     object_path = g_dbus_object_get_object_path (object_or_interface);
   else if (G_IS_DBUS_INTERFACE_SKELETON (object_or_interface))
     object_path = g_dbus_interface_skeleton_get_object_path (object_or_interface);
+  else if (UL_IS_BLOCK (object_or_interface))
+    object_path = ul_block_get_object_path (object_or_interface);
   else
     {
       g_critical ("Invalid interface or object passed to job: %s",

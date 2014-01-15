@@ -44,6 +44,9 @@ void               ul_volume_group_poll                (UlVolumeGroup *self);
 UlLogicalVolume *  ul_volume_group_find_logical_volume (UlVolumeGroup *self,
                                                         const gchar *name);
 
+void               ul_volume_group_update_block        (UlVolumeGroup *self,
+                                                        UlBlock       *block);
+
 G_END_DECLS
 
 #endif /* __UL_VOLUME_GROUP_H__ */

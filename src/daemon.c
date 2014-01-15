@@ -684,23 +684,6 @@ ul_daemon_get_jobs (UlDaemon *self)
   return jobs;
 }
 
-GList *
-ul_daemon_get_blocks (UlDaemon *self)
-{
-  GList *objects, *l;
-  GList *blocks = NULL;
-
-  objects = g_dbus_object_manager_get_objects (G_DBUS_OBJECT_MANAGER (self->object_manager));
-  for (l = objects; l != NULL; l = g_list_next (l))
-    {
-      if (UL_IS_BLOCK (l->data))
-        blocks = g_list_prepend (blocks, g_object_ref (l->data));
-    }
-  g_list_free_full (objects, g_object_unref);
-
-  return blocks;
-}
-
 struct VariantReaderData {
   const GVariantType *type;
   void (*callback) (GPid pid, GVariant *result, GError *error, gpointer user_data);

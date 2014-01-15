@@ -42,6 +42,10 @@ struct _UlManager
   */
   GHashTable *name_to_volume_group;
 
+  /* maps from UDisks object paths to UlBlock instances.
+   */
+  GHashTable *udisks_path_to_block;
+
   gint lvm_delayed_update_id;
 
   /* GDBusObjectManager is that special kind of ugly */
@@ -175,11 +179,11 @@ has_physical_volume_label (GUdevDevice *device)
   return g_strcmp0 (id_fs_type, "LVM2_member") == 0;
 }
 
-static LvmObject *
+static UlBlock *
 find_block (UlManager *self,
             dev_t device_number)
 {
-  LvmObject *our_block = NULL;
+  UlBlock *our_block = NULL;
   UDisksBlock *real_block;
   GDBusObject *object;
   const gchar *path;
@@ -190,7 +194,7 @@ find_block (UlManager *self,
       object = g_dbus_interface_get_object (G_DBUS_INTERFACE (real_block));
       path = g_dbus_object_get_object_path (object);
 
-      our_block = ul_daemon_find_thing (ul_daemon_get (), path, 0);
+      our_block = ul_manager_find_block (self, path);
       g_object_unref (real_block);
     }
 
@@ -201,14 +205,14 @@ static gboolean
 is_recorded_as_physical_volume (UlManager *self,
                                 GUdevDevice *device)
 {
-  LvmObject *object;
+  UlBlock *block;
   gboolean ret = FALSE;
 
-  object = find_block (self, g_udev_device_get_device_number (device));
-  if (object != NULL)
+  block = find_block (self, g_udev_device_get_device_number (device));
+  if (block != NULL)
     {
-      ret = (lvm_object_peek_physical_volume_block (object) != NULL);
-      g_object_unref (object);
+      ret = (ul_block_get_physical_volume_block (block) != NULL);
+      g_object_unref (block);
     }
 
   return ret;
@@ -237,13 +241,25 @@ on_uevent (GUdevClient *client,
 }
 
 static void
+update_block_from_all_volume_groups (UlManager *self,
+                                     UlBlock *block)
+{
+  GHashTableIter iter;
+  gpointer value;
+
+  g_hash_table_iter_init (&iter, self->name_to_volume_group);
+  while (g_hash_table_iter_next (&iter, NULL, &value))
+    ul_volume_group_update_block (UL_VOLUME_GROUP (value), block);
+}
+
+static void
 on_udisks_interface_added (GDBusObjectManager *udisks_object_manager,
                            GDBusObject *object,
                            GDBusInterface *interface,
                            gpointer user_data)
 {
   UlManager *self = user_data;
-  GDBusObjectSkeleton *overlay;
+  UlBlock *overlay;
   const gchar *path;
 
   if (!UDISKS_IS_BLOCK (interface))
@@ -257,8 +273,9 @@ on_udisks_interface_added (GDBusObjectManager *udisks_object_manager,
                           "udev-client", self->udev_client,
                           NULL);
 
-  ul_daemon_publish (ul_daemon_get (), path, FALSE, overlay);
-  g_object_unref (overlay);
+  g_hash_table_insert (self->udisks_path_to_block, g_strdup (path), overlay);
+
+  update_block_from_all_volume_groups (self, overlay);
 }
 
 static void
@@ -281,7 +298,9 @@ on_udisks_interface_removed (GDBusObjectManager *udisks_object_manager,
                              GDBusInterface *interface,
                              gpointer user_data)
 {
+  UlManager *self = user_data;
   const gchar *path;
+  UlBlock *overlay;
 
   if (!UDISKS_IS_BLOCK (interface))
     return;
@@ -289,7 +308,12 @@ on_udisks_interface_removed (GDBusObjectManager *udisks_object_manager,
   /* Same path as the original real udisks block */
   path = g_dbus_proxy_get_object_path (G_DBUS_PROXY (interface));
 
-  ul_daemon_unpublish (ul_daemon_get (), path, NULL);
+  overlay = g_hash_table_lookup (self->udisks_path_to_block, path);
+  if (overlay)
+    {
+      g_object_run_dispose (G_OBJECT (overlay));
+      g_hash_table_remove (self->udisks_path_to_block, path);
+    }
 }
 
 static void
@@ -306,6 +330,29 @@ on_udisks_object_removed (GDBusObjectManager *udisks_object_manager,
   g_list_free_full (interfaces, g_object_unref);
 }
 
+GList *
+ul_manager_get_blocks (UlManager *self)
+{
+  GList *blocks, *l;
+
+  blocks = g_hash_table_get_values (self->udisks_path_to_block);
+  for (l = blocks; l; l = l->next)
+    g_object_ref (l->data);
+  return blocks;
+}
+
+UlBlock *
+ul_manager_find_block (UlManager *self,
+                       const gchar *udisks_path)
+{
+  UlBlock *block;
+  block = g_hash_table_lookup (self->udisks_path_to_block, udisks_path);
+  if (block)
+    return g_object_ref (block);
+  else
+    return NULL;
+}
+
 static void
 ul_manager_init (UlManager *self)
 {
@@ -320,6 +367,12 @@ ul_manager_init (UlManager *self)
       "scsi",
       NULL
   };
+
+  self->name_to_volume_group = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                                                      (GDestroyNotify) g_object_unref);
+
+  self->udisks_path_to_block = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                                                      (GDestroyNotify) g_object_unref);
 
   /* get ourselves an udev client */
   self->udev_client = g_udev_client_new (subsystems);
@@ -362,9 +415,6 @@ ul_manager_constructed (GObject *object)
 
   G_OBJECT_CLASS (ul_manager_parent_class)->constructed (object);
 
-  self->name_to_volume_group = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
-                                                      (GDestroyNotify) g_object_unref);
-
   udisks_client_settle (self->udisks_client);
   lvm_update (self);
 }
@@ -391,6 +441,7 @@ ul_manager_finalize (GObject *object)
 
   g_clear_object (&self->udev_client);
   g_hash_table_unref (self->name_to_volume_group);
+  g_hash_table_unref (self->udisks_path_to_block);
 
   G_OBJECT_CLASS (ul_manager_parent_class)->finalize (object);
 }
@@ -520,6 +571,7 @@ handle_volume_group_create (LvmManager *manager,
                             guint64 arg_extent_size,
                             GVariant *arg_options)
 {
+  UlManager *self = UL_MANAGER (manager);
   GError *error = NULL;
   GList *blocks = NULL;
   GList *l;
@@ -539,14 +591,14 @@ handle_volume_group_create (LvmManager *manager,
    */
   for (n = 0; arg_blocks != NULL && arg_blocks[n] != NULL; n++)
     {
-      GDBusObject *object = NULL;
+      UlBlock *block = NULL;
 
-      object = ul_daemon_find_thing (ul_daemon_get (), arg_blocks[n], 0);
+      block = ul_manager_find_block (self, arg_blocks[n]);
 
       /* Assumes ref, do this early for memory management */
-      blocks = g_list_prepend (blocks, object);
+      blocks = g_list_prepend (blocks, block);
 
-      if (object == NULL)
+      if (block == NULL)
         {
           g_dbus_method_invocation_return_error (invocation,
                                                  UDISKS_ERROR,
@@ -556,17 +608,7 @@ handle_volume_group_create (LvmManager *manager,
           goto out;
         }
 
-      if (!UL_IS_BLOCK (object))
-        {
-          g_dbus_method_invocation_return_error (invocation,
-                                                 UDISKS_ERROR,
-                                                 UDISKS_ERROR_FAILED,
-                                                 "Object path %s for index %d is not a block device",
-                                                 arg_blocks[n], n);
-          goto out;
-        }
-
-      if (!ul_block_is_unused (UL_BLOCK (object), &error))
+      if (!ul_block_is_unused (block, &error))
         {
           g_dbus_method_invocation_take_error (invocation, error);
           goto out;

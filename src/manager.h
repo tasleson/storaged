@@ -37,6 +37,11 @@ UlManager *            ul_manager_new                      (void);
 UlVolumeGroup *        ul_manager_find_volume_group        (UlManager *self,
                                                             const gchar *name);
 
+GList *                ul_manager_get_blocks               (UlManager *self);
+
+UlBlock *              ul_manager_find_block               (UlManager *self,
+                                                            const gchar *udisks_path);
+
 G_END_DECLS
 
 #endif /* __UL_MANAGER_H__ */

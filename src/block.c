@@ -39,7 +39,7 @@
 
 struct _UlBlock
 {
-  LvmObjectSkeleton parent;
+  GObject parent;
   UDisksBlock *real_block;
   GUdevClient *udev_client;
   UlPhysicalVolume *iface_physical_volume;
@@ -48,7 +48,7 @@ struct _UlBlock
 
 typedef struct
 {
-  LvmObjectSkeletonClass parent;
+  GObjectClass parent;
 } UlBlockClass;
 
 enum
@@ -58,7 +58,32 @@ enum
   PROP_REAL_BLOCK,
 };
 
-G_DEFINE_TYPE (UlBlock, ul_block, LVM_TYPE_OBJECT_SKELETON);
+G_DEFINE_TYPE (UlBlock, ul_block, G_TYPE_OBJECT);
+
+static void
+ul_block_dispose (GObject *object)
+{
+  UlBlock *self = UL_BLOCK (object);
+  UlDaemon *daemon;
+
+  daemon = ul_daemon_get ();
+
+  if (self->iface_physical_volume)
+    {
+      ul_daemon_unpublish (daemon, ul_block_get_object_path (self), self->iface_physical_volume);
+      g_object_unref (self->iface_physical_volume);
+      self->iface_physical_volume = NULL;
+    }
+
+  if (self->iface_logical_volume)
+    {
+      ul_daemon_unpublish (daemon, ul_block_get_object_path (self), self->iface_logical_volume);
+      g_object_unref (self->iface_logical_volume);
+      self->iface_logical_volume = NULL;
+    }
+
+  G_OBJECT_CLASS (ul_block_parent_class)->dispose (object);
+}
 
 static void
 ul_block_finalize (GObject *object)
@@ -111,6 +136,7 @@ ul_block_class_init (UlBlockClass *klass)
   GObjectClass *gobject_class;
 
   gobject_class = G_OBJECT_CLASS (klass);
+  gobject_class->dispose = ul_block_dispose;
   gobject_class->finalize = ul_block_finalize;
   gobject_class->set_property = ul_block_set_property;
 
@@ -135,7 +161,8 @@ const gchar *
 ul_block_get_object_path (UlBlock *self)
 {
   g_return_val_if_fail (UL_IS_BLOCK (self), NULL);
-  return g_dbus_object_get_object_path (G_DBUS_OBJECT (self));
+  g_return_val_if_fail (self->real_block != NULL, NULL);
+  return g_dbus_proxy_get_object_path (G_DBUS_PROXY (self->real_block));
 }
 
 GUdevDevice *
@@ -293,6 +320,20 @@ ul_block_update_pv (UlBlock *self,
         }
     }
 
+}
+
+LvmLogicalVolumeBlock *
+ul_block_get_logical_volume_block (UlBlock *self)
+{
+  g_return_val_if_fail (UL_IS_BLOCK (self), NULL);
+  return self->iface_logical_volume;
+}
+
+LvmPhysicalVolumeBlock *
+ul_block_get_physical_volume_block (UlBlock *self)
+{
+  g_return_val_if_fail (UL_IS_BLOCK (self), NULL);
+  return LVM_PHYSICAL_VOLUME_BLOCK (self->iface_physical_volume);
 }
 
 void

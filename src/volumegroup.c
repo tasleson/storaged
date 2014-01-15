@@ -65,7 +65,10 @@ struct _UlVolumeGroup
   gchar *name;
   gboolean need_publish;
 
-  GHashTable *logical_volumes;
+  GVariant *info;                 // output of udisks-lvm-helper
+  GHashTable *logical_volumes;    // lv name -> UlLogicalVolume
+  GHashTable *physical_volumes;   // device path -> GVariant *, output of udisks-lvm-helper
+
   GPid poll_pid;
   guint poll_timeout_id;
   gboolean poll_requested;
@@ -95,12 +98,12 @@ ul_volume_group_init (UlVolumeGroup *self)
 {
   self->logical_volumes = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
                                                  (GDestroyNotify) g_object_unref);
+  self->physical_volumes = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                                                  (GDestroyNotify) g_variant_unref);
   self->need_publish = TRUE;
 }
 
-static void update_all_blocks (UlVolumeGroup *self,
-                               GHashTable *new_lvs,
-                               GHashTable *new_pvs);
+static void update_all_blocks (UlVolumeGroup *self);
 
 static void
 ul_volume_group_dispose (GObject *obj)
@@ -117,8 +120,15 @@ ul_volume_group_dispose (GObject *obj)
   while (g_hash_table_iter_next (&iter, NULL, &value))
       g_object_run_dispose (value);
   g_hash_table_remove_all (self->logical_volumes);
+  g_hash_table_remove_all (self->physical_volumes);
 
-  update_all_blocks (self, NULL, NULL);
+  if (self->info)
+    {
+      g_variant_unref (self->info);
+      self->info = NULL;
+    }
+
+  update_all_blocks (self);
 
   path = ul_volume_group_get_object_path (self);
   if (path != NULL)
@@ -275,9 +285,11 @@ update_progress_for_device (const gchar *operation,
                             double progress)
 {
   UlDaemon *daemon;
+  UlManager *manager;
   GList *jobs, *l;
 
   daemon = ul_daemon_get ();
+  manager = ul_daemon_get_manager (daemon);
   jobs = ul_daemon_get_jobs (daemon);
 
   for (l = jobs; l; l = g_list_next (l))
@@ -295,7 +307,7 @@ update_progress_for_device (const gchar *operation,
           UlBlock *block;
           gboolean found = FALSE;
 
-          block = ul_daemon_find_thing (daemon, job_objects[i], UL_TYPE_BLOCK);
+          block = ul_manager_find_block (manager, job_objects[i]);
           if (block)
             {
               if (g_strcmp0 (ul_block_get_device (block), dev) == 0)
@@ -350,51 +362,42 @@ update_operations (const gchar *lv_name,
 }
 
 
-static void
-update_block (UlVolumeGroup *self,
-              UlBlock *block,
-              GHashTable *new_lvs,
-              GHashTable *new_pvs)
+void
+ul_volume_group_update_block (UlVolumeGroup *self,
+                              UlBlock *block)
 {
+
+  GUdevDevice *device;
+  UlLogicalVolume *volume;
+  const gchar *block_vg_name;
+  const gchar *block_lv_name;
   GVariant *pv_info;
 
-  /* XXX - move this elsewhere? */
-  {
-    GUdevDevice *device;
-    UlLogicalVolume *volume;
-    const gchar *block_vg_name;
-    const gchar *block_lv_name;
-
-    device = ul_block_get_udev (block);
-    if (device && new_lvs)
-      {
-        block_vg_name = g_udev_device_get_property (device, "DM_VG_NAME");
-        block_lv_name = g_udev_device_get_property (device, "DM_LV_NAME");
-
-        if (g_strcmp0 (block_vg_name, ul_volume_group_get_name (self)) == 0
-            && (volume = g_hash_table_lookup (new_lvs, block_lv_name)))
-          {
-            ul_block_update_lv (block, volume);
-          }
-        g_object_unref (device);
-      }
-  }
-
-  pv_info = NULL;
-  if (new_pvs)
+  device = ul_block_get_udev (block);
+  if (device)
     {
-      pv_info = g_hash_table_lookup (new_pvs, ul_block_get_device (block));
-      if (!pv_info)
+      block_vg_name = g_udev_device_get_property (device, "DM_VG_NAME");
+      block_lv_name = g_udev_device_get_property (device, "DM_LV_NAME");
+
+      if (g_strcmp0 (block_vg_name, ul_volume_group_get_name (self)) == 0)
         {
-          const gchar *const *symlinks;
-          int i;
-          symlinks = ul_block_get_symlinks (block);
-          for (i = 0; symlinks[i]; i++)
-            {
-              pv_info = g_hash_table_lookup (new_pvs, symlinks[i]);
-              if (pv_info)
-                break;
-            }
+          volume = g_hash_table_lookup (self->logical_volumes, block_lv_name);
+          ul_block_update_lv (block, volume);
+        }
+      g_object_unref (device);
+    }
+
+  pv_info = g_hash_table_lookup (self->physical_volumes, ul_block_get_device (block));
+  if (!pv_info)
+    {
+      const gchar *const *symlinks;
+      int i;
+      symlinks = ul_block_get_symlinks (block);
+      for (i = 0; symlinks[i]; i++)
+        {
+          pv_info = g_hash_table_lookup (self->physical_volumes, symlinks[i]);
+          if (pv_info)
+            break;
         }
     }
 
@@ -404,7 +407,7 @@ update_block (UlVolumeGroup *self,
     }
   else
     {
-      LvmPhysicalVolumeBlock *pv = lvm_object_peek_physical_volume_block (LVM_OBJECT (block));
+      LvmPhysicalVolumeBlock *pv = ul_block_get_physical_volume_block (block);
       if (pv && g_strcmp0 (lvm_physical_volume_block_get_volume_group (pv),
                            ul_volume_group_get_object_path (self)) == 0)
         ul_block_update_pv (block, NULL, NULL);
@@ -412,18 +415,16 @@ update_block (UlVolumeGroup *self,
 }
 
 static void
-update_all_blocks (UlVolumeGroup *self,
-                   GHashTable *new_lvs,
-                   GHashTable *new_pvs)
+update_all_blocks (UlVolumeGroup *self)
 {
   GList *blocks, *l;
   UlDaemon *daemon;
 
   daemon = ul_daemon_get ();
 
-  blocks = ul_daemon_get_blocks (daemon);
+  blocks = ul_manager_get_blocks (ul_daemon_get_manager (daemon));
   for (l = blocks; l != NULL; l = g_list_next (l))
-    update_block (self, l->data, new_lvs, new_pvs);
+    ul_volume_group_update_block (self, l->data);
   g_list_free_full (blocks, g_object_unref);
 }
 
@@ -438,7 +439,6 @@ update_with_variant (GPid pid,
   GHashTableIter volume_iter;
   gpointer key, value;
   GHashTable *new_lvs;
-  GHashTable *new_pvs;
   gboolean needs_polling = FALSE;
   UlDaemon *daemon;
   gchar *path;
@@ -465,6 +465,17 @@ update_with_variant (GPid pid,
       g_object_unref (self);
       return;
     }
+
+  if (self->info && g_variant_equal (self->info, info))
+    {
+      g_debug ("%s updated without changes", self->name);
+      g_object_unref (self);
+      return;
+    }
+
+  if (self->info)
+    g_variant_unref (self->info);
+  self->info = g_variant_ref (info);
 
   new_lvs = g_hash_table_new (g_str_hash, g_str_equal);
 
@@ -518,9 +529,10 @@ update_with_variant (GPid pid,
 
   lvm_volume_group_set_needs_polling (LVM_VOLUME_GROUP (self), needs_polling);
 
-  /* Update block objects. */
+  /* Update physical volumes. */
 
-  new_pvs = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, (GDestroyNotify)g_variant_unref);
+  g_hash_table_remove_all (self->physical_volumes);
+
   if (g_variant_lookup (info, "pvs", "aa{sv}", &iter))
     {
       const gchar *name;
@@ -528,18 +540,16 @@ update_with_variant (GPid pid,
       while (g_variant_iter_next (iter, "@a{sv}", &pv_info))
         {
           if (g_variant_lookup (pv_info, "device", "&s", &name))
-            g_hash_table_insert (new_pvs, (gchar *)name, pv_info);
+            g_hash_table_insert (self->physical_volumes, g_strdup (name), pv_info);
           else
             g_variant_unref (pv_info);
         }
     }
 
   /* Make sure above is published before updating blocks to point at volume group */
-  update_all_blocks (self, new_lvs, new_pvs);
+  update_all_blocks (self);
 
   g_hash_table_destroy (new_lvs);
-  g_hash_table_destroy (new_pvs);
-
   g_object_unref (self);
 }
 
@@ -784,11 +794,11 @@ handle_delete (LvmVolumeGroup *group,
   if (opt_wipe)
     {
       GPtrArray *devices = g_ptr_array_new ();
-      GList *blocks = ul_daemon_get_blocks (daemon);
+      GList *blocks = ul_manager_get_blocks (ul_daemon_get_manager (daemon));
       for (l = blocks; l; l = l->next)
         {
           LvmPhysicalVolumeBlock *physical_volume;
-          physical_volume = lvm_object_peek_physical_volume_block (l->data);
+          physical_volume = ul_block_get_physical_volume_block (l->data);
           if (physical_volume
               && g_strcmp0 (lvm_physical_volume_block_get_volume_group (physical_volume),
                             ul_volume_group_get_object_path (self)) == 0)
@@ -918,12 +928,14 @@ handle_add_device (LvmVolumeGroup *group,
   UlVolumeGroup *self = UL_VOLUME_GROUP (group);
   UlJob *job;
   UlDaemon *daemon;
+  UlManager *manager;
   GError *error = NULL;
   UlBlock *new_member_device = NULL;
 
   daemon = ul_daemon_get ();
+  manager = ul_daemon_get_manager (daemon);
 
-  new_member_device = ul_daemon_find_thing (daemon, new_member_device_objpath, UL_TYPE_BLOCK);
+  new_member_device = ul_manager_find_block (manager, new_member_device_objpath);
   if (new_member_device == NULL)
     {
       g_dbus_method_invocation_return_error (invocation, UDISKS_ERROR, UDISKS_ERROR_FAILED,
@@ -1054,12 +1066,14 @@ handle_remove_device (LvmVolumeGroup *group,
   UlVolumeGroup *self = UL_VOLUME_GROUP (group);
   VolumeGroupRemdevJobData *data;
   UlDaemon *daemon;
+  UlManager *manager;
   UlBlock *member_device;
   UlJob *job;
 
   daemon = ul_daemon_get ();
+  manager = ul_daemon_get_manager (daemon);
 
-  member_device = ul_daemon_find_thing (daemon, member_device_objpath, UL_TYPE_BLOCK);
+  member_device = ul_manager_find_block (manager, member_device_objpath);
   if (member_device == NULL)
     {
       g_dbus_method_invocation_return_error (invocation, UDISKS_ERROR, UDISKS_ERROR_FAILED,
@@ -1115,14 +1129,16 @@ handle_empty_device (LvmVolumeGroup *group,
 {
   UlJob *job;
   UlDaemon *daemon;
+  UlManager *manager;
   const gchar *member_device_file = NULL;
   UlBlock *member_device = NULL;
   gboolean no_block = FALSE;
 
   daemon = ul_daemon_get ();
+  manager = ul_daemon_get_manager (daemon);
   g_variant_lookup (options, "no-block", "b", &no_block);
 
-  member_device = ul_daemon_find_thing (daemon, member_device_objpath, UL_TYPE_BLOCK);
+  member_device = ul_manager_find_block (manager, member_device_objpath);
   if (member_device == NULL)
     {
       g_dbus_method_invocation_return_error (invocation, UDISKS_ERROR, UDISKS_ERROR_FAILED,
