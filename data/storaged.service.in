@@ -1,8 +1,8 @@
 [Unit]
 Description=LVM Disk Manager
-Documentation=man:udisks-lvm(8)
+Documentation=man:storaged(8)
 
 [Service]
 Type=dbus
 BusName=com.redhat.lvm2
-ExecStart=@udisksdprivdir@/udisksd-lvm
+ExecStart=@storagedprivdir@/storaged

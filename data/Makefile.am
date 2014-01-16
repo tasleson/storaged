@@ -22,7 +22,7 @@ systemdservicedir       = $(systemdsystemunitdir)
 systemdservice_DATA     = $(systemdservice_in_files:.service.in=.service)
 
 $(systemdservice_DATA): $(systemdservice_in_files) Makefile
-	@sed -e "s|\@storagedprivdir\@|$(libdir)storaged|" $< > $@
+	@sed -e "s|\@storagedprivdir\@|$(libdir)/storaged|" $< > $@
 endif
 
 polkitdir        = $(datadir)/polkit-1/actions
