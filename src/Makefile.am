@@ -14,7 +14,7 @@ AM_CPPFLAGS = \
 	-DPACKAGE_BIN_DIR=\""$(bindir)"\" 			\
 	-DPACKAGE_LOCALSTATE_DIR=\""$(localstatedir)"\" 	\
 	-DPACKAGE_LOCALE_DIR=\""$(localedir)"\" 		\
-	-DPACKAGE_LIB_DIR=\""$(prefix)/lib"\" 			\
+	-DPACKAGE_LIB_DIR=\""$(libdir)"\" 			\
 	-D_POSIX_PTHREAD_SEMANTICS -D_REENTRANT			\
 	$(POLKIT_GOBJECT_1_CFLAGS) 				\
 	$(GUDEV_CFLAGS) 					\
