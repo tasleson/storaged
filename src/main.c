@@ -288,7 +288,11 @@ main (int argc,
   ret = 0;
 
  out:
+#if 0
+  // XXX - Tear down of the daemon doesn't always work, so don't
+  //       bother until it does.
   g_clear_object (&daemon);
+#endif
   if (loop != NULL)
     g_main_loop_unref (loop);
   if (opt_context != NULL)
