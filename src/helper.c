@@ -115,6 +115,7 @@ show_logical_volume (vg_t vg,
   add_uint64 (&result, "size", lvm_lv_get_size (lv));
 
   add_lvprop (&result, "lv_attr", lv);
+  add_lvprop (&result, "lv_path", lv);
   add_lvprop (&result, "move_pv", lv);
   add_lvprop (&result, "pool_lv", lv);
   add_lvprop (&result, "origin", lv);

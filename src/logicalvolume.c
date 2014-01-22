@@ -21,6 +21,7 @@
 
 #include "config.h"
 #include <glib/gi18n-lib.h>
+#include <fcntl.h>
 
 #include "logicalvolume.h"
 
@@ -53,6 +54,7 @@ struct _StorageLogicalVolume
 
   gchar *name;
   gboolean needs_publish;
+  gboolean needs_udev_hack;
   StorageVolumeGroup *volume_group;
 };
 
@@ -81,6 +83,7 @@ static void
 storage_logical_volume_init (StorageLogicalVolume *self)
 {
   self->needs_publish = TRUE;
+  self->needs_udev_hack = TRUE;
 }
 
 static void
@@ -259,6 +262,7 @@ storage_logical_volume_update (StorageLogicalVolume *self,
   gboolean active;
   const char *pool_objpath;
   const char *origin_objpath;
+  const gchar *dev_file;
   const gchar *str;
   guint64 num;
   gchar *path;
@@ -345,6 +349,24 @@ storage_logical_volume_update (StorageLogicalVolume *self,
   lvm_logical_volume_set_origin (iface, origin_objpath);
 
   storage_logical_volume_set_volume_group (self, group);
+
+  dev_file = NULL;
+  if (self->needs_udev_hack
+      && g_variant_lookup (info, "lv_path", "&s", &dev_file))
+    {
+      // LVM2 versions before 2.02.105 sometimes incorrectly leave the
+      // DM_UDEV_DISABLE_OTHER_RULES flag set for thin volumes.  As a
+      // workaround, we trigger an extra udev "change" event which
+      // will clear this up.
+      //
+      // https://www.redhat.com/archives/linux-lvm/2014-January/msg00030.html
+
+      int fd = open (dev_file, O_RDWR);
+      if (fd >= 0)
+        close (fd);
+
+      self->needs_udev_hack = FALSE;
+    }
 
   if (self->needs_publish)
     {
