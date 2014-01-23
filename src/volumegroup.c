@@ -1132,11 +1132,9 @@ handle_empty_device (LvmVolumeGroup *group,
   StorageManager *manager;
   const gchar *member_device_file = NULL;
   StorageBlock *member_device = NULL;
-  gboolean no_block = FALSE;
 
   daemon = storage_daemon_get ();
   manager = storage_daemon_get_manager (daemon);
-  g_variant_lookup (options, "no-block", "b", &no_block);
 
   member_device = storage_manager_find_block (manager, member_device_objpath);
   if (member_device == NULL)
@@ -1155,9 +1153,7 @@ handle_empty_device (LvmVolumeGroup *group,
                                            0,    /* uid_t run_as_uid */
                                            0,    /* uid_t run_as_euid */
                                            NULL,  /* input_string */
-                                           "pvmove",
-                                           no_block ? "-b" : member_device_file,
-                                           no_block ? member_device_file : NULL,
+                                           "pvmove", member_device_file,
                                            NULL);
 
   g_signal_connect_data (job, "completed", G_CALLBACK (on_empty_complete),
