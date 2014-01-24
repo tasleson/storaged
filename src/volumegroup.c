@@ -247,13 +247,6 @@ volume_group_update_props (StorageVolumeGroup *self,
   const gchar *str;
   guint64 num;
 
-  if (g_variant_lookup (info, "name", "&s", &str))
-    {
-      gchar *decoded = storage_util_decode_lvm_name (str);
-      lvm_volume_group_set_display_name (iface, decoded);
-      g_free (decoded);
-    }
-
   if (g_variant_lookup (info, "uuid", "&s", &str))
     lvm_volume_group_set_uuid (iface, str);
 
@@ -866,10 +859,8 @@ handle_rename (LvmVolumeGroup *group,
   CompleteClosure *complete;
   StorageJob *job;
   StorageDaemon *daemon;
-  gchar *encoded_new_name = NULL;
 
   daemon = storage_daemon_get ();
-  encoded_new_name = storage_util_encode_lvm_name (new_name, FALSE);
 
   job = storage_daemon_launch_spawned_job (daemon, self,
                                            "lvm-vg-rename",
@@ -880,12 +871,12 @@ handle_rename (LvmVolumeGroup *group,
                                            NULL,  /* input_string */
                                            "vgrename",
                                            storage_volume_group_get_name (self),
-                                           encoded_new_name,
+                                           new_name,
                                            NULL);
 
   complete = g_new0 (CompleteClosure, 1);
   complete->invocation = g_object_ref (invocation);
-  complete->wait_name = encoded_new_name;
+  complete->wait_name = g_strdup (new_name);
 
   /* Wait for the job to finish */
   g_signal_connect (job, "completed", G_CALLBACK (on_rename_complete), complete);
@@ -1211,12 +1202,10 @@ handle_create_plain_volume (LvmVolumeGroup *group,
   CompleteClosure *complete;
   StorageJob *job;
   StorageDaemon *daemon;
-  gchar *encoded_volume_name = NULL;
   GPtrArray *argv;
 
   daemon = storage_daemon_get ();
 
-  encoded_volume_name = storage_util_encode_lvm_name (arg_name, TRUE);
   arg_size -= arg_size % 512;
 
   argv = g_ptr_array_new_with_free_func (g_free);
@@ -1224,7 +1213,7 @@ handle_create_plain_volume (LvmVolumeGroup *group,
   g_ptr_array_add (argv, g_strdup (storage_volume_group_get_name (self)));
   g_ptr_array_add (argv, g_strdup_printf ("-L%" G_GUINT64_FORMAT "b", arg_size));
   g_ptr_array_add (argv, g_strdup ("-n"));
-  g_ptr_array_add (argv, g_strdup (encoded_volume_name));
+  g_ptr_array_add (argv, g_strdup (arg_name));
 
   if (arg_stripes > 0)
     {
@@ -1252,7 +1241,7 @@ handle_create_plain_volume (LvmVolumeGroup *group,
   complete = g_new0 (CompleteClosure, 1);
   complete->invocation = g_object_ref (invocation);
   complete->wait_thing = g_object_ref (self);
-  complete->wait_name = encoded_volume_name;
+  complete->wait_name = g_strdup (arg_name);
 
   /* Wait for the job to finish */
   g_signal_connect (job, "completed", G_CALLBACK (on_create_complete), complete);
@@ -1280,12 +1269,10 @@ handle_create_thin_pool_volume (LvmVolumeGroup *group,
   CompleteClosure *complete;
   StorageJob *job;
   StorageDaemon *daemon;
-  gchar *encoded_volume_name = NULL;
   gchar *size;
 
   daemon = storage_daemon_get ();
 
-  encoded_volume_name = storage_util_encode_lvm_name (arg_name, TRUE);
   arg_size -= arg_size % 512;
 
   size = g_strdup_printf ("%" G_GUINT64_FORMAT "b", arg_size);
@@ -1300,12 +1287,12 @@ handle_create_thin_pool_volume (LvmVolumeGroup *group,
                                            "lvcreate",
                                            storage_volume_group_get_name (self),
                                            "-T", "-L", size, "--thinpool",
-                                           encoded_volume_name, NULL);
+                                           arg_name, NULL);
 
   complete = g_new0 (CompleteClosure, 1);
   complete->invocation = g_object_ref (invocation);
   complete->wait_thing = g_object_ref (self);
-  complete->wait_name = encoded_volume_name;
+  complete->wait_name = g_strdup (arg_name);
 
   /* Wait for the job to finish */
   g_signal_connect (job, "completed", G_CALLBACK (on_create_complete), complete);
@@ -1334,7 +1321,6 @@ handle_create_thin_volume (LvmVolumeGroup *group,
   CompleteClosure *complete;
   StorageJob *job;
   StorageDaemon *daemon;
-  gchar *encoded_volume_name = NULL;
   StorageLogicalVolume *pool;
   gchar *size;
 
@@ -1348,7 +1334,6 @@ handle_create_thin_volume (LvmVolumeGroup *group,
       return TRUE;
     }
 
-  encoded_volume_name = storage_util_encode_lvm_name (arg_name, TRUE);
   arg_size -= arg_size % 512;
 
   size = g_strdup_printf ("%" G_GUINT64_FORMAT "b", arg_size);
@@ -1363,12 +1348,12 @@ handle_create_thin_volume (LvmVolumeGroup *group,
                                            "lvcreate",
                                            storage_volume_group_get_name (self),
                                            "--thinpool", storage_logical_volume_get_name (pool),
-                                           "-V", size, "-n", encoded_volume_name, NULL);
+                                           "-V", size, "-n", arg_name, NULL);
 
   complete = g_new0 (CompleteClosure, 1);
   complete->invocation = g_object_ref (invocation);
   complete->wait_thing = g_object_ref (self);
-  complete->wait_name = encoded_volume_name;
+  complete->wait_name = g_strdup (arg_name);
 
   /* Wait for the job to finish */
   g_signal_connect (job, "completed", G_CALLBACK (on_create_complete), complete);

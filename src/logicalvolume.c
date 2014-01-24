@@ -269,13 +269,6 @@ storage_logical_volume_update (StorageLogicalVolume *self,
 
   iface = LVM_LOGICAL_VOLUME (self);
 
-  if (g_variant_lookup (info, "name", "&s", &str))
-    {
-      gchar *decoded = storage_util_decode_lvm_name (str);
-      lvm_logical_volume_set_display_name (iface, decoded);
-      g_free (decoded);
-    }
-
   if (g_variant_lookup (info, "uuid", "&s", &str))
     lvm_logical_volume_set_uuid (iface, str);
 
@@ -494,7 +487,6 @@ handle_rename (LvmLogicalVolume *volume,
   StorageLogicalVolume *self = STORAGE_LOGICAL_VOLUME (volume);
   StorageVolumeGroup *group;
   gchar *full_name = NULL;
-  gchar *encoded_new_name = NULL;
   gchar *error_message = NULL;
   CompleteClosure *complete;
   StorageJob *job;
@@ -505,7 +497,6 @@ handle_rename (LvmLogicalVolume *volume,
   full_name = g_strdup_printf ("%s/%s",
                                storage_volume_group_get_name (group),
                                storage_logical_volume_get_name (self));
-  encoded_new_name = storage_util_encode_lvm_name (new_name, TRUE);
 
   job = storage_daemon_launch_spawned_job (daemon, self,
                                       "lvm-vg-rename",
@@ -514,12 +505,12 @@ handle_rename (LvmLogicalVolume *volume,
                                       0,    /* uid_t run_as_uid */
                                       0,    /* uid_t run_as_euid */
                                       NULL,  /* input_string */
-                                      "lvrename", full_name, encoded_new_name, NULL);
+                                      "lvrename", full_name, new_name, NULL);
 
   complete = g_new0 (CompleteClosure, 1);
   complete->invocation = g_object_ref (invocation);
   complete->wait_thing = g_object_ref (group);
-  complete->wait_name = encoded_new_name;
+  complete->wait_name = g_strdup (new_name);
 
   /* Wait for the job to finish */
   g_signal_connect (job, "completed", G_CALLBACK (on_rename_complete), complete);
@@ -787,7 +778,6 @@ handle_create_snapshot (LvmLogicalVolume *volume,
   StorageLogicalVolume *self = STORAGE_LOGICAL_VOLUME (volume);
   StorageVolumeGroup *group;
   StorageDaemon *daemon;
-  gchar *encoded_volume_name = NULL;
   CompleteClosure *complete;
   StorageJob *job;
   GPtrArray *args;
@@ -795,7 +785,6 @@ handle_create_snapshot (LvmLogicalVolume *volume,
   daemon = storage_daemon_get ();
 
   group = storage_logical_volume_get_volume_group (self);
-  encoded_volume_name = storage_util_encode_lvm_name (name, TRUE);
 
   args = g_ptr_array_new_with_free_func (g_free);
   g_ptr_array_add (args, g_strdup ("lvcreate"));
@@ -803,7 +792,7 @@ handle_create_snapshot (LvmLogicalVolume *volume,
   g_ptr_array_add (args, g_strdup_printf ("%s/%s", storage_volume_group_get_name (group),
                                           storage_logical_volume_get_name (self)));
   g_ptr_array_add (args, g_strdup ("-n"));
-  g_ptr_array_add (args, g_strdup (encoded_volume_name));
+  g_ptr_array_add (args, g_strdup (name));
 
   if (size > 0)
     {
@@ -822,7 +811,7 @@ handle_create_snapshot (LvmLogicalVolume *volume,
                                             (const gchar **)args->pdata);
 
   complete = g_new0 (CompleteClosure, 1);
-  complete->wait_name = encoded_volume_name;
+  complete->wait_name = g_strdup (name);
   complete->wait_thing = g_object_ref (group);
   complete->invocation = g_object_ref (invocation);
 

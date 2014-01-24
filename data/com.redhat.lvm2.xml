@@ -115,13 +115,6 @@
     -->
     <property name="Name" type="s" access="read"/>
 
-    <!-- DisplayName:
-
-         The name of this volume group as it should be displayed to
-         the user.
-    -->
-    <property name="DisplayName" type="s" access="read"/>
-
     <!-- UUID:
 
          The UUID this volume group.  It is guaranteed to be unique,
@@ -182,19 +175,16 @@
     </method>
 
     <!-- Rename:
-         @new_display_name: The new display name.
+         @new_name: The new name.
 
          Rename this volume group.  This might cause the volume group
          object to disappear from D-Bus and reappear with a different
          path.
-
-         The new display name can be any string and is not restricted
-         by the rules for LVM2 names.
     -->
     <method name="Rename">
       <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
       <annotation name="polkit.message" value="Authentication is required to rename a volume group"/>
-      <arg name="new_display_name" type="s" direction="in"/>
+      <arg name="new_name" type="s" direction="in"/>
       <arg name="options" type="a{sv}" direction="in"/>
       <arg name="result" type="o" direction="out"/>
     </method>
@@ -327,13 +317,6 @@
     -->
     <property name="Name" type="s" access="read"/>
 
-    <!-- DisplayName:
-
-         The name of this logical volume, as it should be displayed to
-         the user.
-    -->
-    <property name="DisplayName" type="s" access="read"/>
-
     <!-- Active:
 
          Whether or not this volume is active.
@@ -434,19 +417,16 @@
     </method>
 
     <!-- Rename:
-         @new_display_name: The new display name.
+         @new_name: The new name.
 
          Rename this logical volume.  This might cause the logical
          volume object to disappear from D-Bus and reappear with a
          different path.
-
-         The new display name can be any string and is not restricted
-         by the rules for LVM2 names.
     -->
     <method name="Rename">
       <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
       <annotation name="polkit.message" value="Authentication is required to rename a logical volume"/>
-      <arg name="new_display_name" type="s" direction="in"/>
+      <arg name="new_name" type="s" direction="in"/>
       <arg name="options" type="a{sv}" direction="in"/>
       <arg name="result" type="o" direction="out"/>
     </method>

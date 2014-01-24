@@ -31,11 +31,6 @@ gchar *             storage_util_build_object_path       (const gchar *base,
 
 gboolean            storage_util_lvm_name_is_reserved    (const gchar *name);
 
-gchar *             storage_util_encode_lvm_name         (const gchar *name,
-                                                          gboolean for_logical_volume);
-
-gchar *             storage_util_decode_lvm_name         (const gchar *encoded);
-
 gboolean            storage_util_wipe_block              (const gchar *device_file,
                                                           GError **error);
 

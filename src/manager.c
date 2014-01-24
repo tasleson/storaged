@@ -620,7 +620,7 @@ handle_volume_group_create (LvmManager *manager,
   /* Create the volume group... */
   complete = g_new0 (CompleteClosure, 1);
   complete->invocation = g_object_ref (invocation);
-  complete->data.vgname = storage_util_encode_lvm_name (arg_name, FALSE);
+  complete->data.vgname = g_strdup (arg_name);
   if (arg_extent_size > 0)
     complete->data.extent_size = g_strdup_printf ("%" G_GUINT64_FORMAT "b", arg_extent_size);
 

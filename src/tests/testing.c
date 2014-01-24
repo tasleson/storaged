@@ -665,7 +665,6 @@ testing_target_vgname (void)
 {
   gchar *vgdisplay;
   gchar *vgname;
-  gchar *encoded;
   gint i;
 
   /*
@@ -681,16 +680,12 @@ testing_target_vgname (void)
   for (i = 0; i < 512; i++)
     {
       vgname = g_strdup_printf ("test-storaged-%d", i);
-      encoded = storage_util_encode_lvm_name (vgname, FALSE);
-      if (!strstr (vgdisplay, vgname) && !strstr (vgdisplay, encoded))
+      if (!strstr (vgdisplay, vgname))
         break;
-      g_free (encoded);
-      encoded = NULL;
       g_free (vgname);
       vgname = NULL;
     }
 
-  g_free (encoded);
   g_free (vgdisplay);
   g_assert (vgname != NULL);
 

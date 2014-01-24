@@ -182,7 +182,7 @@ test_volume_group_create (Test *test,
   volume_group = lookup_interface (test, volume_group_path, "com.redhat.lvm2.VolumeGroup");
   g_assert (volume_group != NULL);
 
-  g_assert_cmpstr (testing_proxy_string (volume_group, "DisplayName"), ==, test->vgname);
+  g_assert_cmpstr (testing_proxy_string (volume_group, "Name"), ==, test->vgname);
 
   testing_target_execute (NULL, "vgremove", "-f", testing_proxy_string (volume_group, "Name"), NULL);
   g_object_unref (volume_group);
@@ -245,7 +245,7 @@ test_logical_volume_create (Test *test,
   volume_group_path = g_dbus_proxy_get_object_path (test->volume_group);
   g_assert_cmpstr (testing_proxy_string (logical_volume, "VolumeGroup"), ==, volume_group_path);
   g_assert_str_prefix (path, volume_group_path);
-  g_assert_cmpstr (testing_proxy_string (logical_volume, "DisplayName"), ==, name);
+  g_assert_cmpstr (testing_proxy_string (logical_volume, "Name"), ==, name);
 
   g_variant_unref (retval);
 }
