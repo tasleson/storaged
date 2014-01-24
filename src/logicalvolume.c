@@ -671,7 +671,7 @@ handle_activate (LvmLogicalVolume *volume,
                                            0,    /* uid_t run_as_uid */
                                            0,    /* uid_t run_as_euid */
                                            NULL,  /* input_string */
-                                           "lvchange", full_name, "-a", "y", NULL);
+                                           "lvchange", full_name, "-ay", "-K", "--yes", NULL);
 
   complete = g_new0 (CompleteClosure, 1);
   complete->wait_thing = g_object_ref (self);
@@ -734,7 +734,7 @@ handle_deactivate (LvmLogicalVolume *volume,
                                            0,    /* uid_t run_as_uid */
                                            0,    /* uid_t run_as_euid */
                                            NULL,  /* input_string */
-                                           "lvchange", full_name, "-a", "n", NULL);
+                                           "lvchange", full_name, "-an", "-K", "--yes", NULL);
 
   g_signal_connect_data (job, "completed", G_CALLBACK (on_deactivate_complete),
                          g_object_ref (invocation), (GClosureNotify)g_object_unref, 0);

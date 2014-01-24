@@ -395,6 +395,9 @@
 
          Activate this logical volume, which makes it appear as a
          block device in the system.
+
+         Non-thin snapshots are always activated and deactivated
+         together with their origins.
     -->
     <method name="Activate">
       <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
@@ -407,6 +410,9 @@
 
          Deactivate this logical volume, which makes its block device
          disappear.
+
+         Non-thin snapshots are always activated and deactivated
+         together with their origins.
     -->
     <method name="Deactivate">
       <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>
