@@ -556,7 +556,6 @@ storage_manager_class_init (StorageManagerClass *klass)
 typedef struct {
   gchar **devices;
   gchar *vgname;
-  gchar *extent_size;
 } VolumeGroupCreateJobData;
 
 static gboolean
@@ -581,11 +580,6 @@ volume_group_create_job_thread (GCancellable *cancellable,
   argv = g_ptr_array_new ();
   g_ptr_array_add (argv, (gchar *)"vgcreate");
   g_ptr_array_add (argv, data->vgname);
-  if (data->extent_size)
-    {
-      g_ptr_array_add (argv, (gchar *)"-s");
-      g_ptr_array_add (argv, data->extent_size);
-    }
   for (i = 0; data->devices[i] != NULL; i++)
     g_ptr_array_add (argv, data->devices[i]);
   g_ptr_array_add (argv, NULL);
@@ -625,7 +619,6 @@ complete_closure_free (gpointer user_data,
   VolumeGroupCreateJobData *data = &complete->data;
   g_strfreev (data->devices);
   g_free (data->vgname);
-  g_free (data->extent_size);
   g_object_unref (complete->invocation);
   g_free (complete);
 }
@@ -664,9 +657,8 @@ on_create_complete (UDisksJob *job,
 static gboolean
 handle_volume_group_create (LvmManager *manager,
                             GDBusMethodInvocation *invocation,
-                            const gchar *const *arg_blocks,
                             const gchar *arg_name,
-                            guint64 arg_extent_size,
+                            const gchar *const *arg_blocks,
                             GVariant *arg_options)
 {
   StorageManager *self = STORAGE_MANAGER (manager);
@@ -719,9 +711,6 @@ handle_volume_group_create (LvmManager *manager,
   complete = g_new0 (CompleteClosure, 1);
   complete->invocation = g_object_ref (invocation);
   complete->data.vgname = g_strdup (arg_name);
-  if (arg_extent_size > 0)
-    complete->data.extent_size = g_strdup_printf ("%" G_GUINT64_FORMAT "b", arg_extent_size);
-
   complete->data.devices = g_new0 (gchar *, n + 1);
   for (n = 0, l = blocks; l != NULL; l = g_list_next (l), n++)
     {

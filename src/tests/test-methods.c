@@ -168,9 +168,9 @@ test_volume_group_create (Test *test,
   blocks[0] = g_variant_new_object_path (test->blocks[0].object_path);
   blocks[1] = g_variant_new_object_path (test->blocks[1].object_path);
   retval = g_dbus_proxy_call_sync (manager, "VolumeGroupCreate",
-                                   g_variant_new ("(@aost@a{sv})",
+                                   g_variant_new ("(s@ao@a{sv})",
+                                                  test->vgname,
                                                   g_variant_new_array (G_VARIANT_TYPE_OBJECT_PATH, blocks, 2),
-                                                  test->vgname, (guint64)0,
                                                   g_variant_new_array (G_VARIANT_TYPE ("{sv}"), NULL, 0)),
                                    G_DBUS_CALL_FLAGS_NO_AUTO_START,
                                    -1, NULL, &error);
@@ -201,7 +201,8 @@ test_volume_group_delete (Test *test,
   testing_want_removed (test->objman, &test->volume_group);
 
   retval = g_dbus_proxy_call_sync (test->volume_group, "Delete",
-                                   g_variant_new ("(@a{sv})",
+                                   g_variant_new ("(b@a{sv})",
+                                                  FALSE,
                                                   g_variant_new_array (G_VARIANT_TYPE ("{sv}"), NULL, 0)),
                                    G_DBUS_CALL_FLAGS_NO_AUTO_START,
                                    -1, NULL, &error);
@@ -226,11 +227,9 @@ test_logical_volume_create (Test *test,
   const gchar *volume_group_path;
 
   retval = g_dbus_proxy_call_sync (test->volume_group, "CreatePlainVolume",
-                                   g_variant_new ("(stit@a{sv})",
+                                   g_variant_new ("(st@a{sv})",
                                                   name,
                                                   (guint64)20 * 1024 * 1024,
-                                                  0, /* stripes */
-                                                  0, /* stripesize */
                                                   g_variant_new_array (G_VARIANT_TYPE ("{sv}"), NULL, 0)),
                                    G_DBUS_CALL_FLAGS_NO_AUTO_START,
                                    -1, NULL, &error);

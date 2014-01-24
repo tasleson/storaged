@@ -822,12 +822,12 @@ on_delete_complete (UDisksJob *job,
 static gboolean
 handle_delete (LvmVolumeGroup *group,
                GDBusMethodInvocation *invocation,
+               gboolean arg_wipe,
                GVariant *arg_options)
 {
   StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (group);
   VolumeGroupDeleteJobData *data;
   StorageDaemon *daemon;
-  gboolean opt_wipe = FALSE;
   StorageJob *job;
   GList *l;
 
@@ -837,8 +837,7 @@ handle_delete (LvmVolumeGroup *group,
   data->vgname = g_strdup (storage_volume_group_get_name (self));
 
   /* Find physical volumes to wipe. */
-  g_variant_lookup (arg_options, "wipe", "b", &opt_wipe);
-  if (opt_wipe)
+  if (arg_wipe)
     {
       GPtrArray *devices = g_ptr_array_new ();
       GList *blocks = storage_manager_get_blocks (storage_daemon_get_manager (daemon));
@@ -1106,6 +1105,7 @@ static gboolean
 handle_remove_device (LvmVolumeGroup *group,
                       GDBusMethodInvocation *invocation,
                       const gchar *member_device_objpath,
+                      gboolean wipe,
                       GVariant *options)
 {
   StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (group);
@@ -1127,7 +1127,7 @@ handle_remove_device (LvmVolumeGroup *group,
     }
 
   data = g_new0 (VolumeGroupRemdevJobData, 1);
-  g_variant_lookup (options, "wipe", "b", &data->wipe);
+  data->wipe = wipe;
   data->vgname = g_strdup (storage_volume_group_get_name (self));
   data->pvname = g_strdup (storage_block_get_device (member_device));
 
@@ -1248,8 +1248,6 @@ handle_create_plain_volume (LvmVolumeGroup *group,
                             GDBusMethodInvocation *invocation,
                             const gchar *arg_name,
                             guint64 arg_size,
-                            gint arg_stripes,
-                            guint64 arg_stripesize,
                             GVariant *options)
 {
   StorageVolumeGroup *self = STORAGE_VOLUME_GROUP (group);
@@ -1268,19 +1266,6 @@ handle_create_plain_volume (LvmVolumeGroup *group,
   g_ptr_array_add (argv, g_strdup_printf ("-L%" G_GUINT64_FORMAT "b", arg_size));
   g_ptr_array_add (argv, g_strdup ("-n"));
   g_ptr_array_add (argv, g_strdup (arg_name));
-
-  if (arg_stripes > 0)
-    {
-      g_ptr_array_add (argv, g_strdup ("-i"));
-      g_ptr_array_add (argv, g_strdup_printf ("%d", arg_stripes));
-    }
-
-  if (arg_stripesize > 0)
-    {
-      g_ptr_array_add (argv, g_strdup ("-I"));
-      g_ptr_array_add (argv, g_strdup_printf ("%" G_GUINT64_FORMAT "b", arg_stripesize));
-    }
-
   g_ptr_array_add (argv, NULL);
 
   job = storage_daemon_launch_spawned_jobv (daemon, self,

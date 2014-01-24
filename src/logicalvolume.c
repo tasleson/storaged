@@ -533,8 +533,6 @@ static gboolean
 handle_resize (LvmLogicalVolume *volume,
                GDBusMethodInvocation *invocation,
                guint64 new_size,
-               int stripes,
-               guint64 stripesize,
                GVariant *options)
 {
   StorageLogicalVolume *self = STORAGE_LOGICAL_VOLUME (volume);
@@ -554,19 +552,6 @@ handle_resize (LvmLogicalVolume *volume,
                                           storage_volume_group_get_name (group),
                                           storage_logical_volume_get_name (self)));
   g_ptr_array_add (args, g_strdup_printf ("-L%" G_GUINT64_FORMAT "b", new_size));
-
-  if (stripes > 0)
-    {
-      g_ptr_array_add (args, g_strdup ("-i"));
-      g_ptr_array_add (args, g_strdup_printf ("%d", stripes));
-    }
-
-  if (stripesize > 0)
-    {
-      g_ptr_array_add (args, g_strdup ("-I"));
-      g_ptr_array_add (args, g_strdup_printf ("%" G_GUINT64_FORMAT "b", stripesize));
-    }
-
   g_ptr_array_add (args, NULL);
 
   job = storage_daemon_launch_spawned_jobv (daemon, self,
