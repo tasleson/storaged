@@ -808,7 +808,7 @@ handle_create_snapshot (LvmLogicalVolume *volume,
   if (size > 0)
     {
       size -= size % 512;
-      g_ptr_array_add (args, g_strdup_printf (" -L%" G_GUINT64_FORMAT "b", size));
+      g_ptr_array_add (args, g_strdup_printf ("-L%" G_GUINT64_FORMAT "b", size));
     }
 
   g_ptr_array_add (args, NULL);
