@@ -60,11 +60,62 @@ typedef struct
   LvmManagerSkeletonClass parent;
 } StorageManagerClass;
 
+enum
+{
+  COLDPLUG_COMPLETED_SIGNAL,
+  LAST_SIGNAL
+};
+
+static guint signals[LAST_SIGNAL] = { 0 };
+
 static void lvm_manager_iface_init (LvmManagerIface *iface);
+static void async_initable_iface_init (GAsyncInitableIface *iface);
 
 G_DEFINE_TYPE_WITH_CODE (StorageManager, storage_manager, LVM_TYPE_MANAGER_SKELETON,
                          G_IMPLEMENT_INTERFACE (LVM_TYPE_MANAGER, lvm_manager_iface_init);
+                         G_IMPLEMENT_INTERFACE (G_TYPE_ASYNC_INITABLE, async_initable_iface_init);
 );
+
+struct UpdateData {
+  StorageManager *self;
+  gboolean ignore_locks;
+  GTask *task;
+
+  int pending_vg_updates;
+};
+
+static void trigger_delayed_lvm_update (StorageManager *self);
+
+static void
+lvm_update_done (struct UpdateData *data)
+{
+  if (data->ignore_locks)
+    {
+      // Do a warmplug right away because we might have gotten invalid
+      // data when ignoring locking during coldplug.
+
+      trigger_delayed_lvm_update (data->self);
+    }
+
+  if (data->task)
+    {
+      g_task_return_boolean (data->task, TRUE);
+      g_object_unref (data->task);
+    }
+
+  g_free (data);
+}
+
+static void
+lvm_vg_update_done (StorageVolumeGroup *unused,
+                    gpointer user_data)
+{
+  struct UpdateData *data = user_data;
+
+  data->pending_vg_updates -= 1;
+  if (data->pending_vg_updates == 0)
+    lvm_update_done (data);
+}
 
 static void
 lvm_update_from_variant (GPid pid,
@@ -72,7 +123,8 @@ lvm_update_from_variant (GPid pid,
                          GError *error,
                          gpointer user_data)
 {
-  StorageManager *self = user_data;
+  struct UpdateData *data = user_data;
+  StorageManager *self = data->self;
   GVariantIter var_iter;
   GHashTableIter vg_name_iter;
   gpointer key, value;
@@ -122,26 +174,39 @@ lvm_update_from_variant (GPid pid,
 
       if (group == NULL)
         {
-          group = storage_volume_group_new (name);
+          group = storage_volume_group_new (self, name);
           g_debug ("adding volume group: %s", name);
 
           g_hash_table_insert (self->name_to_volume_group, g_strdup (name), group);
         }
 
-      storage_volume_group_update (group);
+      data->pending_vg_updates += 1;
+      storage_volume_group_update (group, data->ignore_locks, lvm_vg_update_done, data);
     }
+
+  if (data->pending_vg_updates == 0)
+    lvm_update_done (data);
 }
 
 static void
-lvm_update (StorageManager *self)
+lvm_update (StorageManager *self,
+            gboolean ignore_locks,
+            GTask *task)
 {
+  struct UpdateData *data;
   const gchar *args[] = {
       "storaged-lvm-helper", "-b", "list",
       NULL
   };
 
+  data = g_new0 (struct UpdateData, 1);
+  data->self = self;
+  data->task = task;
+  data->ignore_locks = ignore_locks;
+  data->pending_vg_updates = 0;
+
   storage_daemon_spawn_for_variant (storage_daemon_get (), args, G_VARIANT_TYPE("as"),
-                               lvm_update_from_variant, self);
+                                    lvm_update_from_variant, data);
 }
 
 static gboolean
@@ -149,7 +214,7 @@ delayed_lvm_update (gpointer user_data)
 {
   StorageManager *self = STORAGE_MANAGER (user_data);
 
-  lvm_update (self);
+  lvm_update (self, FALSE, NULL);
   self->lvm_delayed_update_id = 0;
 
   return FALSE;
@@ -416,7 +481,29 @@ storage_manager_constructed (GObject *object)
   G_OBJECT_CLASS (storage_manager_parent_class)->constructed (object);
 
   udisks_client_settle (self->udisks_client);
-  lvm_update (self);
+}
+
+static void
+storage_manager_init_async (GAsyncInitable       *initable,
+                            int                   io_priority,
+                            GCancellable         *cancellable,
+                            GAsyncReadyCallback   callback,
+                            gpointer              user_data)
+{
+  StorageManager *self = STORAGE_MANAGER (initable);
+  GTask *task;
+
+  task = g_task_new (initable, cancellable, callback, user_data);
+  lvm_update (self, TRUE, task);
+}
+
+static gboolean
+storage_manager_init_async_finish (GAsyncInitable       *initable,
+                                   GAsyncResult         *result,
+                                   GError              **error)
+{
+  g_return_val_if_fail (g_task_is_valid (result, initable), FALSE);
+  return g_task_propagate_boolean (G_TASK (result), error);
 }
 
 static void
@@ -453,6 +540,17 @@ storage_manager_class_init (StorageManagerClass *klass)
 
   object_class->constructed = storage_manager_constructed;
   object_class->finalize = storage_manager_finalize;
+
+  signals[COLDPLUG_COMPLETED_SIGNAL] =
+    g_signal_new ("coldplug-completed",
+                  STORAGE_TYPE_MANAGER,
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL,
+                  NULL,
+                  NULL,
+                  G_TYPE_NONE,
+                  0);
 }
 
 typedef struct {
@@ -660,8 +758,25 @@ lvm_manager_iface_init (LvmManagerIface *iface)
   iface->handle_volume_group_create = handle_volume_group_create;
 }
 
-StorageManager *
-storage_manager_new (void)
+static void
+async_initable_iface_init (GAsyncInitableIface *iface)
 {
-  return g_object_new (STORAGE_TYPE_MANAGER, NULL);
+  iface->init_async = storage_manager_init_async;
+  iface->init_finish = storage_manager_init_async_finish;
+}
+
+void
+storage_manager_new_async (GAsyncReadyCallback callback,
+                           gpointer user_data)
+{
+  return g_async_initable_new_async (STORAGE_TYPE_MANAGER, 0, NULL,
+                                     callback, user_data,
+                                     NULL);
+}
+
+StorageManager *
+storage_manager_new_finish (GObject *source,
+                            GAsyncResult *res)
+{
+  return STORAGE_MANAGER (g_async_initable_new_finish (G_ASYNC_INITABLE (source), res, NULL));
 }

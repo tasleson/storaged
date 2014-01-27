@@ -62,6 +62,8 @@ struct _StorageVolumeGroup
 {
   LvmVolumeGroupSkeleton parent_instance;
 
+  StorageManager *manager;
+
   gchar *name;
   gboolean need_publish;
 
@@ -83,6 +85,7 @@ enum
 {
   PROP_0,
   PROP_NAME,
+  PROP_MANAGER,
 };
 
 static void volume_group_iface_init (LvmVolumeGroupIface *iface);
@@ -162,6 +165,10 @@ storage_volume_group_get_property (GObject *obj,
       g_value_set_string (value, storage_volume_group_get_name (self));
       break;
 
+    case PROP_MANAGER:
+      g_value_set_object (value, self->manager);
+      break;
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (obj, prop_id, pspec);
       break;
@@ -181,6 +188,11 @@ storage_volume_group_set_property (GObject *obj,
     case PROP_NAME:
       g_free (self->name);
       self->name = g_value_dup_string (value);
+      break;
+
+    case PROP_MANAGER:
+      g_assert (self->manager == NULL);
+      self->manager = g_value_get_object (value);
       break;
 
     default:
@@ -214,6 +226,22 @@ storage_volume_group_class_init (StorageVolumeGroupClass *klass)
                                                         G_PARAM_READABLE |
                                                         G_PARAM_WRITABLE |
                                                         G_PARAM_STATIC_STRINGS));
+
+  /**
+   * StorageVolumeGroupObject:manager:
+   *
+   * The manager of the volume group.
+   */
+  g_object_class_install_property (gobject_class,
+                                   PROP_MANAGER,
+                                   g_param_spec_object ("manager",
+                                                        "Manager",
+                                                        "The manager of the volume group",
+                                                        STORAGE_TYPE_MANAGER,
+                                                        G_PARAM_READABLE |
+                                                        G_PARAM_WRITABLE |
+                                                        G_PARAM_CONSTRUCT_ONLY |
+                                                        G_PARAM_STATIC_STRINGS));
 }
 
 /**
@@ -224,9 +252,11 @@ storage_volume_group_class_init (StorageVolumeGroupClass *klass)
  * Returns: A new #StorageVolumeGroup. Free with g_object_unref().
  */
 StorageVolumeGroup *
-storage_volume_group_new (const gchar *name)
+storage_volume_group_new (StorageManager *manager,
+                          const gchar *name)
 {
   return g_object_new (STORAGE_TYPE_VOLUME_GROUP,
+                       "manager", manager,
                        "name", name,
                        NULL);
 }
@@ -411,15 +441,18 @@ static void
 update_all_blocks (StorageVolumeGroup *self)
 {
   GList *blocks, *l;
-  StorageDaemon *daemon;
 
-  daemon = storage_daemon_get ();
-
-  blocks = storage_manager_get_blocks (storage_daemon_get_manager (daemon));
+  blocks = storage_manager_get_blocks (self->manager);
   for (l = blocks; l != NULL; l = g_list_next (l))
     storage_volume_group_update_block (self, l->data);
   g_list_free_full (blocks, g_object_unref);
 }
+
+struct UpdateData {
+  StorageVolumeGroup *self;
+  StorageVolumeGroupCallback *done;
+  gpointer done_user_data;
+};
 
 static void
 update_with_variant (GPid pid,
@@ -427,7 +460,8 @@ update_with_variant (GPid pid,
                      GError *error,
                      gpointer user_data)
 {
-  StorageVolumeGroup *self = user_data;
+  struct UpdateData *data = user_data;
+  StorageVolumeGroup *self = data->self;
   GVariantIter *iter;
   GHashTableIter volume_iter;
   gpointer key, value;
@@ -542,20 +576,40 @@ update_with_variant (GPid pid,
   /* Make sure above is published before updating blocks to point at volume group */
   update_all_blocks (self);
 
+  if (data->done)
+    data->done (self, data->done_user_data);
+
   g_hash_table_destroy (new_lvs);
   g_object_unref (self);
+  g_free (data);
 }
 
 void
-storage_volume_group_update (StorageVolumeGroup *self)
+storage_volume_group_update (StorageVolumeGroup *self,
+                             gboolean ignore_locks,
+                             StorageVolumeGroupCallback *done,
+                             gpointer done_user_data)
 {
-  const gchar *args[] = {
-      "storaged-lvm-helper", "-b",
-      "show", self->name, NULL
-  };
+  struct UpdateData *data;
+  const gchar *args[6];
+  int i;
+
+  i = 0;
+  args[i++] = "storaged-lvm-helper";
+  args[i++] = "-b";
+  if (ignore_locks)
+    args[i++] = "-f";
+  args[i++] = "show";
+  args[i++] = self->name;
+  args[i++] = NULL;
+
+  data = g_new0 (struct UpdateData, 1);
+  data->self = g_object_ref (self);
+  data->done = done;
+  data->done_user_data = done_user_data;
 
   storage_daemon_spawn_for_variant (storage_daemon_get (), args, G_VARIANT_TYPE ("a{sv}"),
-                                    update_with_variant, g_object_ref (self));
+                                    update_with_variant, data);
 }
 
 static void

@@ -256,10 +256,28 @@ on_client_disappeared (const gchar *bus_name,
 }
 
 static void
+on_manager_ready (GObject *source,
+                  GAsyncResult *res,
+                  gpointer user_data)
+{
+  StorageDaemon *self = user_data;
+
+  self->manager = storage_manager_new_finish (source, res);
+  storage_daemon_publish (self, "/org/freedesktop/UDisks2/Manager", FALSE, self->manager);
+
+  self->name_owner_id = g_bus_own_name_on_connection (self->connection,
+                                                      "com.redhat.storaged",
+                                                      self->name_flags,
+                                                      on_name_acquired,
+                                                      on_name_lost,
+                                                      self,
+                                                      NULL);
+}
+
+static void
 storage_daemon_constructed (GObject *object)
 {
   StorageDaemon *self = STORAGE_DAEMON (object);
-  GDBusObjectSkeleton *skeleton;
   GError *error;
 
   G_OBJECT_CLASS (storage_daemon_parent_class)->constructed (object);
@@ -284,20 +302,7 @@ storage_daemon_constructed (GObject *object)
   /* Export the ObjectManager */
   g_dbus_object_manager_server_set_connection (self->object_manager, self->connection);
 
-  self->manager = storage_manager_new ();
-
-  skeleton = G_DBUS_OBJECT_SKELETON (lvm_object_skeleton_new ("/org/freedesktop/UDisks2/Manager"));
-  g_dbus_object_skeleton_add_interface (skeleton, G_DBUS_INTERFACE_SKELETON (self->manager));
-  g_dbus_object_manager_server_export (self->object_manager, skeleton);
-  g_object_unref (skeleton);
-
-  self->name_owner_id = g_bus_own_name_on_connection (self->connection,
-                                                      "com.redhat.storaged",
-                                                      self->name_flags,
-                                                      on_name_acquired,
-                                                      on_name_lost,
-                                                      self,
-                                                      NULL);
+  storage_manager_new_async (on_manager_ready, self);
 }
 
 static void

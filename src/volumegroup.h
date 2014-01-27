@@ -29,15 +29,22 @@ G_BEGIN_DECLS
 #define STORAGE_VOLUME_GROUP(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), STORAGE_TYPE_VOLUME_GROUP, StorageVolumeGroup))
 #define STORAGE_IS_VOLUME_GROUP(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), STORAGE_TYPE_VOLUME_GROUP))
 
+typedef void StorageVolumeGroupCallback (StorageVolumeGroup *self,
+                                         gpointer user_data);
+
 GType                   storage_volume_group_get_type            (void) G_GNUC_CONST;
 
-StorageVolumeGroup *    storage_volume_group_new                 (const gchar *name);
+StorageVolumeGroup *    storage_volume_group_new                 (StorageManager *manager,
+                                                                  const gchar *name);
 
 const gchar *           storage_volume_group_get_name            (StorageVolumeGroup *self);
 
 const gchar *           storage_volume_group_get_object_path     (StorageVolumeGroup *self);
 
-void                    storage_volume_group_update              (StorageVolumeGroup *self);
+void                    storage_volume_group_update              (StorageVolumeGroup *self,
+                                                                  gboolean ignore_locks,
+                                                                  StorageVolumeGroupCallback *done,
+                                                                  gpointer done_user_data);
 
 void                    storage_volume_group_poll                (StorageVolumeGroup *self);
 

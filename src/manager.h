@@ -32,7 +32,11 @@ G_BEGIN_DECLS
 
 GType                  storage_manager_get_type            (void) G_GNUC_CONST;
 
-StorageManager *       storage_manager_new                 (void);
+void                   storage_manager_new_async           (GAsyncReadyCallback callback,
+                                                            gpointer user_data);
+
+StorageManager        *storage_manager_new_finish          (GObject *source,
+                                                            GAsyncResult *res);
 
 StorageVolumeGroup *   storage_manager_find_volume_group   (StorageManager *self,
                                                             const gchar *name);
