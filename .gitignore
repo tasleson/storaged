@@ -1,5 +1,4 @@
 *~
-*.conf
 *.gcda
 *.gcno
 *.gir
@@ -60,3 +59,4 @@ build/m4/*.m4
 build/po/
 build/src/
 build/storaged-[0-9]*
+/data/com.redhat.lvm2.conf

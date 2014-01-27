@@ -34,12 +34,17 @@ polkit_DATA      = $(polkit_in_files:.policy.in=.policy)
 dbusinterfacedir = $(datadir)/dbus-1/interfaces
 dbusinterface_DATA = com.redhat.lvm2.xml
 
+install-data-local:
+	$(MKDIR_P) $(DESTDIR)$(libdir)/storaged/lvm-nolocking
+	$(INSTALL_DATA) $(srcdir)/lvm-nolocking.conf $(DESTDIR)$(libdir)/storaged/lvm-nolocking/lvm.conf
+
 EXTRA_DIST = 						\
 	com.redhat.lvm2.xml				\
 	$(systemdservice_in_files)			\
 	$(dbusservice_in_files)				\
 	$(dbusconf_in_files)				\
 	$(polkit_in_files)				\
+	lvm-nolocking.conf                              \
 	$(NULL)
 
 clean-local :
