@@ -5,8 +5,8 @@
  "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
 
 <policyconfig>
-  <vendor>udisks lvm</vendor>
-  <vendor_url>http://udisks.freedesktop.org/</vendor_url>
+  <vendor>storaged</vendor>
+  <vendor_url>http://redhat.com/</vendor_url>
   <icon_name>drive-removable-media</icon_name>
 
   <action id="com.redhat.lvm2.create-logical-volume">

@@ -4,5 +4,5 @@ Documentation=man:storaged(8)
 
 [Service]
 Type=dbus
-BusName=com.redhat.lvm2
+BusName=com.redhat.storaged
 ExecStart=@storagedprivdir@/storaged

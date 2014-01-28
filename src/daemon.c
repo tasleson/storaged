@@ -292,7 +292,7 @@ storage_daemon_constructed (GObject *object)
   g_object_unref (skeleton);
 
   self->name_owner_id = g_bus_own_name_on_connection (self->connection,
-                                                      "com.redhat.lvm2",
+                                                      "com.redhat.storaged",
                                                       self->name_flags,
                                                       on_name_acquired,
                                                       on_name_lost,

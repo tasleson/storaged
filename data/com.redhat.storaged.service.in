@@ -1,5 +1,5 @@
 [D-BUS Service]
-Name=com.redhat.lvm2
+Name=com.redhat.storaged
 Exec=@storagedprivdir@/storaged
 User=root
 SystemdService=storaged.service

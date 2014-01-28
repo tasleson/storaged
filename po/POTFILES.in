@@ -1,7 +1,7 @@
 [encoding: UTF-8]
 # List of source files containing translatable strings.
 # Please keep this file sorted alphabetically.
-data/com.redhat.lvm2.policy.in
+data/com.redhat.storaged.policy.in
 src/job.c
 src/invocation.c
 src/logicalvolume.c

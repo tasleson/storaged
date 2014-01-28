@@ -650,7 +650,7 @@ testing_target_setup (GDBusConnection **connection,
 
   *objman = g_dbus_object_manager_client_new_sync (*connection,
                                                    G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_DO_NOT_AUTO_START,
-                                                   "com.redhat.lvm2",
+                                                   "com.redhat.storaged",
                                                    "/org/freedesktop/UDisks2",
                                                    NULL, NULL, NULL, NULL, &error);
   g_assert_no_error (error);

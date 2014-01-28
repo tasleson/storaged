@@ -6,11 +6,11 @@
 <busconfig>
   <!-- Only root can own the service -->
   <policy user="root">
-    <allow own="com.redhat.lvm2"/>
+    <allow own="com.redhat.storaged"/>
   </policy>
 
-  <!-- Anyone can send messages to the owner of com.redhat.lvm2 -->
+  <!-- Anyone can send messages to the owner of com.redhat.storaged -->
   <policy context="default">
-    <allow send_destination="com.redhat.lvm2"/>
+    <allow send_destination="com.redhat.storaged"/>
   </policy>
 </busconfig>
