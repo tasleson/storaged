@@ -37,6 +37,8 @@ stamp-h1
 stamp-it
 
 data/*.service
+data/com.redhat.storaged.conf
+data/com.redhat.lvm2.conf
 
 doc/version.xml
 doc/man/*.8
@@ -59,4 +61,6 @@ build/m4/*.m4
 build/po/
 build/src/
 build/storaged-[0-9]*
-/data/com.redhat.lvm2.conf
+
+storaged-[0-9]*
+

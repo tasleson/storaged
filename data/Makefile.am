@@ -37,6 +37,8 @@ dbusinterface_DATA = com.redhat.lvm2.xml
 install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(libdir)/storaged/lvm-nolocking
 	$(INSTALL_DATA) $(srcdir)/lvm-nolocking.conf $(DESTDIR)$(libdir)/storaged/lvm-nolocking/lvm.conf
+uninstall-local:
+	rm -f $(DESTDIR)$(libdir)/storaged/lvm-nolocking/lvm.conf
 
 EXTRA_DIST = 						\
 	com.redhat.lvm2.xml				\

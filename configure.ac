@@ -1,6 +1,6 @@
 
 m4_define([storaged_major], [0])
-m4_define([storaged_minor], [1])
+m4_define([storaged_minor], [2])
 m4_define([storaged_micro], [0])
 
 dnl ---------------------------------------------------------------------------

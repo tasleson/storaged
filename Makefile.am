@@ -8,6 +8,7 @@ ACLOCAL_AMFLAGS = -I build/m4
 
 EXTRA_DIST = 			\
 	HACKING 		\
+	NEWS			\
 	$(NULL)
 
 DISTCHECK_CONFIGURE_FLAGS=							\
@@ -33,3 +34,7 @@ coverage:
 		.coverage/info
 	@echo "file://$(abs_top_builddir)/.coverage/index.html"
 endif
+
+release: distcheck
+	git tag -as $(PACKAGE_VERSION)
+	gpg --detach-sign --local-user `git config user.email` $(DIST_ARCHIVES)
