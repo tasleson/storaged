@@ -1,17 +1,15 @@
-This is an addon to udisks, it is not part a of udisks itself
-at this time.
+Storaged, a D-Bus service for storage management
+================================================
 
-OVERVIEW
-========
+Currently, storaged implements a D-Bus API for monitoring and
+manipulating LVM2 volume groups, but there is room for more.
 
-The udisks project provides a daemon, tools and libraries to access
-and manipulate disks and storage devices.
+Storaged works well with UDisks, and tries not to duplicate its
+functionality.  For example, you would create a new logical volume
+with storaged and then make a filesystem on it with UDisks.
 
-This is addon to udisks, that enables usage of LVM.
+CAVEAT:
 
-LICENSE
-=======
-
-See the COPYING file for the license. In a nutshell, the daemon and
-tools are licensed under the GPLv2 (or later) and libraries are
-licensed under LGPLv2 (or later).
+    This is pre-release software.  Only install it in a system that
+    you are ready to lose.  It is a good idea to make a virtual
+    machine to play around with storaged.
