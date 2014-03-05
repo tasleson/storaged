@@ -178,6 +178,9 @@ storage_util_wipe_block (const gchar *device_file,
       return FALSE;
     }
 
+  g_free (standard_output);
+  g_free (standard_error);
+
   return TRUE;
 }
 
