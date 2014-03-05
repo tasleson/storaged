@@ -122,8 +122,10 @@ storage_util_wipe_block (const gchar *device_file,
   gchar *standard_output;
   gchar *standard_error;
   gint exit_status;
+  GError *local_error = NULL;
 
-  const gchar *argv[] = { "wipefs", "-a", device_file, NULL };
+  const gchar *wipe_argv[] = { "wipefs", "-a", device_file, NULL };
+  const gchar *pvscan_argv[] = { "pvscan", "--cache", device_file, NULL };
 
   /* Remove partition table */
   memset (zeroes, 0, 512);
@@ -159,7 +161,7 @@ storage_util_wipe_block (const gchar *device_file,
 
   /* wipe other labels */
   if (!g_spawn_sync (NULL,
-                     (gchar **)argv,
+                     (gchar **)wipe_argv,
                      NULL,
                      G_SPAWN_SEARCH_PATH,
                      NULL,
@@ -176,6 +178,37 @@ storage_util_wipe_block (const gchar *device_file,
       g_free (standard_output);
       g_free (standard_error);
       return FALSE;
+    }
+
+  g_free (standard_output);
+  g_free (standard_error);
+
+  standard_output = NULL;
+  standard_error = NULL;
+
+  /* Make sure lvmetad knows about all this.
+   *
+   * XXX - We need to do this because of a bug in the LVM udev rules
+   * which often fail to run pvscan on "change" events.
+   *
+   * https://bugzilla.redhat.com/show_bug.cgi?id=1063813
+   */
+
+  if (!g_spawn_sync (NULL,
+                     (gchar **)pvscan_argv,
+                     NULL,
+                     G_SPAWN_SEARCH_PATH,
+                     NULL,
+                     NULL,
+                     &standard_output,
+                     &standard_error,
+                     &exit_status,
+                     &local_error)
+      || !g_spawn_check_exit_status (exit_status, &local_error))
+    {
+      g_warning ("%s", local_error->message);
+      g_warning ("stdout: '%s', stderr: '%s', ", standard_output, standard_error);
+      g_clear_error (&local_error);
     }
 
   g_free (standard_output);
