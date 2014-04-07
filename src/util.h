@@ -41,6 +41,9 @@ gboolean            storage_util_check_status_and_output (const gchar *cmd,
                                                           const gchar *standard_error,
                                                           GError **error);
 
+void                storage_util_trigger_udev            (const gchar *device_file);
+
+
 /*
  * GLib doesn't have g_info() yet:
  * https://bugzilla.gnome.org/show_bug.cgi?id=711103

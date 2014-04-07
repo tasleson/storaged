@@ -337,10 +337,7 @@ storage_logical_volume_update (StorageLogicalVolume *self,
       //
       // https://www.redhat.com/archives/linux-lvm/2014-January/msg00030.html
 
-      int fd = open (dev_file, O_RDWR);
-      if (fd >= 0)
-        close (fd);
-
+      storage_util_trigger_udev (dev_file);
       self->needs_udev_hack = FALSE;
     }
 

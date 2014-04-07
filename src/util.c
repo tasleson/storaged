@@ -308,3 +308,11 @@ storage_util_check_status_and_output (const gchar *cmd,
   g_string_free (message, TRUE);
   return FALSE;
 }
+
+void
+storage_util_trigger_udev (const gchar *device_file)
+{
+  int fd = open (device_file, O_RDWR);
+  if (fd >= 0)
+    close (fd);
+}
