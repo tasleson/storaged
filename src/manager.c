@@ -598,6 +598,13 @@ volume_group_create_job_thread (GCancellable *cancellable,
                                              standard_error, error);
     }
 
+  if (ret)
+    {
+      // https://bugzilla.redhat.com/show_bug.cgi?id=1084944
+      for (i = 0; data->devices[i] != NULL; i++)
+        storage_util_trigger_udev (data->devices[i]);
+    }
+
   g_free (standard_output);
   g_free (standard_error);
   return ret;
