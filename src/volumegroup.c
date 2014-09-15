@@ -69,7 +69,7 @@ struct _StorageVolumeGroup
 
   GVariant *info;                 // output of storaged-lvm-helper
   GHashTable *logical_volumes;    // lv name -> StorageLogicalVolume
-  GHashTable *physical_volumes;   // device path -> GVariant *, output of udisks-lvm-helper
+  GHashTable *physical_volumes;   // device path -> GVariant *, output of storaged-lvm-helper
 
   GPid poll_pid;
   guint poll_timeout_id;

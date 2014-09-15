@@ -59,13 +59,13 @@ machine, such as a virtual machine. This machine is called the target.
 Prerequisites:
 
  * The target machine must have the same operating system and version as
-   the machine that is building udisks-lvm.
+   the machine that is building storaged.
  * The target machine must be accessible as root via SSH from the
    build machine, preferrably with an SSH key.
- * The build directory of udisks-lvm must be NFS mounted in exactly the
+ * The build directory of storaged must be NFS mounted in exactly the
    same location on the target machine. This mount can be read-only,
    unless coverage testing is desired.
- * All dependencies of udisks-lvm must be installed on the target machine.
+ * All dependencies of storaged must be installed on the target machine.
 
 Export build directory on build machine:
 
