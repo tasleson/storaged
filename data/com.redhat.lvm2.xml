@@ -471,7 +471,10 @@
 
          Resize this logical volume.
 
-         No additional options are currently specified.
+         Additional options:
+
+         resize_fsys (b):   Whether to resize the filesystem on the
+                            logical volume as well.  Default to 'false'.
     -->
     <method name="Resize">
       <annotation name="polkit.action_id" value="com.redhat.lvm2.manage-lvm"/>

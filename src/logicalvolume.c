@@ -537,11 +537,14 @@ handle_resize (LvmLogicalVolume *volume,
   StorageDaemon *daemon;
   StorageJob *job;
   GPtrArray *args;
+  gboolean resize_fsys = FALSE;
 
   daemon = storage_daemon_get ();
 
   group = storage_logical_volume_get_volume_group (self);
   new_size -= new_size % 512;
+
+  g_variant_lookup (options, "resize_fsys", "b", &resize_fsys);
 
   args = g_ptr_array_new_with_free_func (g_free);
   g_ptr_array_add (args, g_strdup ("lvresize"));
@@ -549,6 +552,8 @@ handle_resize (LvmLogicalVolume *volume,
                                           storage_volume_group_get_name (group),
                                           storage_logical_volume_get_name (self)));
   g_ptr_array_add (args, g_strdup_printf ("-L%" G_GUINT64_FORMAT "b", new_size));
+  if (resize_fsys)
+    g_ptr_array_add (args, g_strdup_printf ("-r"));
   g_ptr_array_add (args, NULL);
 
   job = storage_daemon_launch_spawned_jobv (daemon, self,
