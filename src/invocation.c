@@ -436,7 +436,7 @@ on_authorize_method (GDBusInterfaceSkeleton *instance,
                      gpointer user_data)
 {
   const GDBusMethodInfo *info;
-  PolkitAuthorizationResult *result;
+  PolkitAuthorizationResult *result = NULL;
   PolkitCheckAuthorizationFlags flags;
   const gchar *action_id;
   PolkitDetails *details;
