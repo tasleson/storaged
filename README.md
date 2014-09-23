@@ -17,7 +17,7 @@ CAVEAT:
 Getting started:
 -------------------
 
-### Building the source:
+### Building the source
 
 After you grab the source by using git do the following:
 
@@ -39,7 +39,7 @@ Afterward you should be able to do a
 
    $ make
 
-### Running storaged:
+### Running storaged
 Simplest way to use is to do a 'make install' on the system you which to run the daemon on, however if you just want to hack on it without doing a full install you can do:
 
     $ sudo cp data/com.redhat.storaged.conf /etc/dbus-1/system-d/
