@@ -42,7 +42,7 @@ Afterward you should be able to do a
 ### Running storaged
 Simplest way to use is to do a 'make install' on the system you which to run the daemon on, however if you just want to hack on it without doing a full install you can do:
 
-    $ sudo cp data/com.redhat.storaged.conf /etc/dbus-1/system-d/
+    $ sudo cp data/com.redhat.storaged.conf /etc/dbus-1/system.d/
     $ sudo cp data/com.redhat.lvm2.policy /usr/share/polkit-1/actions
     $ sudo src/storaged --resource-dir $PWD/src -d -r
 
